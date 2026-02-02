@@ -1,0 +1,22 @@
+{
+  "name": "graphdb-skill",
+  "version": "2.0.0",
+  "description": "General purpose GraphDB skill for Gemini CLI",
+  "main": "scripts/query_graph.js",
+  "dependencies": {
+    "glob": "^13.0.0",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-c-sharp": "^0.23.1",
+    "tree-sitter-cpp": "^0.23.4",
+    "tree-sitter-html": "^0.23.2",
+    "tree-sitter-vb-dotnet": "^0.1.9",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.26.3",
+    "neo4j-driver": "^6.0.1",
+    "dotenv": "^17.2.3",
+    "@google/genai": "^1.39.0"
+  },
+  "scripts": {
+    "test": "node --test extraction/test/*.test.js tests/*.test.js"
+  }
+}

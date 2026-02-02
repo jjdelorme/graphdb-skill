@@ -1,0 +1,177 @@
+const neo4jService = require('./Neo4jService');
+
+const queries = {
+    'ui-contamination': async (session, params) => {
+        const module = params.module || '.*';
+        const result = await session.run(`
+            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
+            WHERE file.file =~ $pattern
+            RETURN 
+                count(f) as total,
+                sum(CASE WHEN f.ui_contaminated THEN 1 ELSE 0 END) as contaminated,
+                sum(CASE WHEN f.pure_business_logic THEN 1 ELSE 0 END) as pure
+        `, { pattern: `.*${module}.*` });
+        return result.records[0].toObject();
+    },
+    'globals': async (session, params) => {
+        const module = params.module || '.*';
+        const result = await session.run(`
+            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
+            WHERE file.file =~ $pattern
+            MATCH (f)-[r:USES_GLOBAL]->(g:Global)
+            RETURN f.label as function, type(r) as access, g.label as global, file.file as file
+            LIMIT 100
+        `, { pattern: `.*${module}.*` });
+        return result.records.map(r => r.toObject());
+    },
+    'seams': async (session, params) => {
+        const module = params.module || '.*';
+        const result = await session.run(`
+            MATCH (caller:Function {ui_contaminated: true})-[:CALLS]->(f:Function {ui_contaminated: false})-[:DEFINED_IN]->(file:File)
+            WHERE file.file =~ $pattern
+            RETURN DISTINCT f.label as seam, file.file as file, f.risk_score as risk
+            ORDER BY f.risk_score DESC
+            LIMIT 20
+        `, { pattern: `.*${module}.*` });
+        return result.records.map(r => r.toObject());
+    },
+    'hotspots': async (session, params) => {
+        const module = params.module || '.*';
+        const result = await session.run(`
+            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
+            WHERE file.file =~ $pattern AND f.risk_score IS NOT NULL
+            RETURN f.label as name, f.risk_score as risk, file.file as file
+            ORDER BY f.risk_score DESC
+            LIMIT 20
+        `, { pattern: `.*${module}.*` });
+        return result.records.map(r => r.toObject());
+    },
+    'co-change': async (session, params) => {
+        const file = params.file;
+        if (!file) return { error: 'Missing file parameter' };
+        const result = await session.run(`
+            MATCH (f1:File {file: $file})-[r:CO_CHANGED_WITH]-(f2:File)
+            RETURN f2.file as co_changed_file, r.count as count
+            ORDER BY r.count DESC
+        `, { file });
+        return result.records.map(r => r.toObject());
+    },
+    'impact': async (session, params) => {
+        const func = params.function;
+        if (!func) return { error: 'Missing function parameter' };
+        const result = await session.run(`
+            MATCH (caller:Function)-[:CALLS*1..3]->(f:Function {label: $func})
+            RETURN DISTINCT caller.label as caller, caller.ui_contaminated as contaminated
+        `, { func });
+        return result.records.map(r => r.toObject());
+    },
+    'test-context': async (session, params) => {
+        const func = params.function;
+        if (!func) return { error: 'Missing function parameter' };
+        const result = await session.run(`
+            MATCH (f:Function {label: $func})-[:CALLS|USES_GLOBAL]->(dep)
+            RETURN dep.label as dependency, dep.type as type, labels(dep) as labels
+        `, { func });
+        return result.records.map(r => r.toObject());
+    },
+    'extract-service': async (session, params) => {
+        const module = params.module || '.*';
+        const result = await session.run(`
+            MATCH (f:Function {ui_contaminated: false})-[:DEFINED_IN]->(file:File)
+            WHERE file.file =~ $pattern
+            OPTIONAL MATCH (caller)-[:CALLS]->(f)
+            WITH f, file, count(caller) as call_count
+            RETURN f.label as name, file.file as file, f.risk_score as risk, call_count
+            ORDER BY call_count DESC, f.risk_score DESC
+            LIMIT 20
+        `, { pattern: `.*${module}.*` });
+        return result.records.map(r => r.toObject());
+    },
+    'progress': async (session, params) => {
+        const result = await session.run(`
+            MATCH (f:Function)
+            RETURN 
+                count(f) as total,
+                sum(CASE WHEN f.ui_contaminated THEN 1 ELSE 0 END) as contaminated,
+                sum(CASE WHEN f.pure_business_logic THEN 1 ELSE 0 END) as pure,
+                sum(CASE WHEN f.risk_score > 1000 THEN 1 ELSE 0 END) as high_risk
+        `);
+        return result.records[0].toObject();
+    },
+    'function': async (session, params) => {
+        const func = params.function;
+        if (!func) return { error: 'Missing function parameter' };
+        const result = await session.run(`
+            MATCH (f:Function {label: $func})
+            OPTIONAL MATCH (f)-[:DEFINED_IN]->(file:File)
+            RETURN f as function, file.file as file
+        `, { func });
+        return result.records.map(r => ({
+            ...r.get('function').properties,
+            file: r.get('file')
+        }));
+    },
+    'analyze-state': async (session, params) => {
+        const func = params.function;
+        if (!func) return { error: 'Missing function parameter' };
+        
+        // Return usages of globals
+        const result = await session.run(`
+            MATCH (f:Function {label: $func})
+            OPTIONAL MATCH (f)-[:USES_GLOBAL]->(g:Global)
+            RETURN g.label as name, g.type as type, g.file as defined_in
+        `, { func });
+        
+        const state = {
+            Globals: [],
+            FileStatics: [], // Placeholders for future refinement
+            Constants: []
+        };
+        
+        result.records.forEach(r => {
+            const name = r.get('name');
+            if (name) {
+                state.Globals.push({ name, file: r.get('defined_in') });
+            }
+        });
+        
+        return state;
+    }
+};
+
+async function main() {
+    const args = process.argv.slice(2);
+    if (args.length === 0) {
+        console.log('Usage: node query_graph.js <query-type> [--module <module>] [--function <func>] [--file <file>]');
+        console.log('Types:', Object.keys(queries).join(', '));
+        process.exit(1);
+    }
+
+    const type = args[0];
+    const params = {};
+    for (let i = 1; i < args.length; i += 2) {
+        const key = args[i].replace('--', '');
+        const value = args[i + 1];
+        params[key] = value;
+    }
+
+    if (!queries[type]) {
+        console.error('Unknown query type:', type);
+        process.exit(1);
+    }
+
+    const session = neo4jService.getSession();
+    try {
+        const result = await queries[type](session, params);
+        console.log(JSON.stringify(result, (key, value) => 
+            typeof value === 'bigint' ? value.toString() : value
+        , 2));
+    } catch (error) {
+        console.error('Query Error:', error);
+    } finally {
+        await session.close();
+        await neo4jService.close();
+    }
+}
+
+main().catch(console.error);

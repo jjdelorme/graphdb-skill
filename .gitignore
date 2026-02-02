@@ -1,0 +1,21 @@
+# Nested repository (already has its own git)
+VIEW/
+
+# Logs and Build Artifacts
+build_logs/
+*.log
+build_verification_report.txt
+
+# Data Directories
+graph_data/
+backup_graph_data/
+/*.json
+
+# Temporary Tools and Binaries
+temp_tools/
+
+# Dependencies
+node_modules/
+
+# Environment Variables
+.env
