@@ -1,6 +1,6 @@
 # Plan: Hybrid Graph with Vector Search (GraphRAG)
 
-**Goal:** Enhance the existing Code Property Graph (CPG) with semantic vector embeddings to identify implicit dependencies (e.g., cross-language calls, string-based APIs) that static analysis misses.
+**Goal:** Enhance the existing Code Property Graph (CPG) with semantic vector embeddings to generate **Refactoring-Ready Context**. This allows the agent to identify implicit dependencies (cross-language calls, logical clones) that static analysis misses, facilitating safe refactoring of legacy code.
 
 **Target Model:** `gemini-embedding-001` via Vertex AI.
 **Library:** `google.genai` (Node.js SDK) or Google Cloud Vertex AI REST API.
@@ -9,7 +9,18 @@
 
 ---
 
-## 1. Architecture Update
+## 1. Rationale: Why Hybrid?
+
+Many target projects are mature "Legacy Systems" with mixed languages or complex architectures. Static analysis (`query_graph.js` today) only sees *explicit* structural links. It fails to catch:
+1.  **Logical Clones:** Copy-pasted business logic (common in legacy code) that must be refactored together.
+2.  **Implicit Coupling:** Dependencies via database state, shared strings, or loosely coupled events.
+3.  **Cross-Language Semantics:** Linking logic in one language (e.g., C++) to tests or related modules in another (e.g., C#) based on meaning, not just symbols.
+
+By merging **Structural** (Callers/Callees) and **Semantic** (Vector Similarity) data, we provide the LLM with a complete "Context Window" for safe code modification.
+
+---
+
+## 2. Architecture Update
 
 We will move from a pure **Structural Graph** to a **Hybrid Graph**.
 
@@ -17,7 +28,7 @@ We will move from a pure **Structural Graph** to a **Hybrid Graph**.
 1.  **`VectorService`**: A Node.js module interacting with Google Vertex AI.
     *   **CRITICAL:** Must implement **Exponential Backoff** and **Retry Logic** to handle HTTP 429 (Quota Exceeded) errors robustly.
 2.  **`enrich_vectors.js`**: A standalone script that iterates existing `Function` nodes, reads their source code from disk, generates embeddings, and updates the graph.
-3.  **`find_implicit_links.js`**: A new CLI tool that accepts a natural language query (or code snippet), vector searches the graph, and proposes "Soft Links".
+3.  **`query_graph.js` (Enhanced)**: updated to support a `hybrid-context` command that merges structural neighbors with semantic neighbors.
 
 ### Schema Changes (Neo4j)
 *   **Node Property**: `Function.embedding` (Vector<Float>, 768 dimensions for `gemini-embedding-001`).
@@ -25,7 +36,7 @@ We will move from a pure **Structural Graph** to a **Hybrid Graph**.
 
 ---
 
-## 2. Test-First Strategy (TDD)
+## 3. Test-First Strategy (TDD)
 
 We will harden the existing prototype code by adding missing test coverage before refactoring.
 
@@ -38,11 +49,11 @@ We will harden the existing prototype code by adding missing test coverage befor
 
 ### B. Update `EnrichmentLogic.test.js` (or create if missing)
 *   **Test 1: Source Extraction**: Verify it respects the `start_line` / `end_line` from the graph.
-*   **Test 2: Safety Filter**: Verify the logic (or Cypher) explicitly excludes `node_modules`.
+*   **Test 2: Safety Filter**: Verify the logic (or Cypher) explicitly excludes `node_modules` or other ignored directories.
 
 ---
 
-## 3. Implementation Plan
+## 4. Implementation Plan
 
 ### Phase 0: Environment Setup (Skill Stability)
 
@@ -82,39 +93,41 @@ Before any refactoring, we must ensure the skill's local environment is stable.
     2.  **Integrate Neo4jService**: (As per Phase 1).
     3.  **Error Handling**: Ensure file read errors don't crash the entire batch.
 
-### Phase 4: Query Tool Refinement
+### Phase 4: Integration into `query_graph.js`
 
-**File:** `.gemini/skills/graphdb/scripts/find_implicit_links.js`
+**File:** `.gemini/skills/graphdb/scripts/query_graph.js`
 
-**Usage:** `node find_implicit_links.js --query "updates inventory table"`
+**Goal:** Create a unified `hybrid-context` command.
 
-**Logic:**
-1.  Generate embedding for the query string.
-2.  Cypher:
-    ```cypher
-    CALL db.index.vector.queryNodes('function_embeddings', 10, $queryVector)
-    YIELD node, score
-    RETURN node.name, node.file, score
-    ```
+1.  **Import Vector Search Logic**: Integrate the search query from the prototype `find_implicit_links.js`.
+2.  **New Command**: `hybrid-context --function <name>`
+    *   **Step 1 (Structure):** Fetch callers/callees (existing `test-context` logic).
+    *   **Step 2 (Semantic):** Fetch top 5 vector matches for the target function (excluding the function itself).
+    *   **Step 3 (Merge)::** Return a JSON object containing `structural_dependencies` and `semantic_related`.
+    *   **Step 4 (Cluster):** Support "Cluster Analysis" to find cohesive groups of functions (Seams) for extraction. (See [plans/cluster_plan.md](./cluster_plan.md)).
+3.  **Refinement:** Ensure the output distinguishes between "Definite Call" (Hard) and "Potential Clone/Relation" (Soft).
+
+### Phase 5: Handling Stale Graphs
+See dedicated plan: [plans/avoid_stale_graph.md](./avoid_stale_graph.md) for the "Git-Driven Delta" strategy to keep embeddings in sync during refactoring.
 
 ---
 
-## 4. Documentation & Agent Interaction
+## 5. Documentation & Agent Interaction
 
 ### Agent Interaction Flow
-This new capability allows the agent to bridge the gap between "User Intent" and "Code Implementation".
+This new capability allows the agent to build a **Refactoring Context Window**.
 
-1.  **Trigger:** User asks a vague discovery question (e.g., *"Where is the billing logic?"* or *"How do we handle PDF export?"*).
-2.  **Tool Selection:** Agent identifies `find_implicit_links.js` from `SKILL.md` as the discovery tool.
-3.  **Execution:** Agent runs `node .gemini/skills/graphdb/scripts/find_implicit_links.js --query "billing logic"`.
-4.  **Output Parsing:** The tool returns a JSON array of candidates (`{ name, file, score }`).
-5.  **Refinement (Optional):** The agent *may* autonomously follow up with `query_graph.js test-context --function <name>` on the top result to verify its relevance before presenting it to the user.
+1.  **Trigger:** User asks to "Refactor `TargetFunction` logic".
+2.  **Tool Selection:** Agent uses `query_graph.js hybrid-context --function TargetFunction`.
+3.  **Output Parsing:** The tool returns:
+    *   **Hard Dependencies:** `TargetFunction` calls `HelperFunction`.
+    *   **Soft Dependencies:** `TargetFunction` is 98% similar to `TargetFunctionLegacy` (Potential clone!).
+4.  **Action:** Agent reads the source of *all* these functions to ensure the refactor handles the legacy clone and the active logic simultaneously.
 
 ### `SKILL.md` Updates
 *   **Frontmatter:** Update `description` to include "semantic search and implicit dependency discovery".
-*   **Tool Usage:** Document `find_implicit_links.js` explicitly.
-*   **Output Format:** Specify that the tool returns **JSON**.
-*   **Instruction:** "Use this tool when you cannot find a function by exact name, or when the user describes *behavior* rather than *syntax*."
+*   **Tool Usage:** Document the `hybrid-context` command in `query_graph.js`.
+*   **Instruction:** "Use `hybrid-context` when preparing to refactor a function to ensure you catch hidden dependencies and logical clones."
 
 ### `README.md`
 *   Add section **"Vector Search Support"**.
@@ -123,9 +136,9 @@ This new capability allows the agent to bridge the gap between "User Intent" and
 
 ---
 
-## 5. Verification Checklist
+## 6. Verification Checklist
 
 1.  [ ] Unit tests for `VectorService` pass (mocked ADC, mocked 429 errors).
-2.  [ ] `enrich_vectors.js` runs on the "Alpine" graph without errors and respects rate limits.
+2.  [ ] `enrich_vectors.js` runs on the target graph without errors and respects rate limits.
 3.  [ ] Neo4j Browser shows `embedding` property populated.
-4.  [ ] `find_implicit_links.js` returns relevant functions for a vague query (e.g., "draws the balcony").
+4.  [ ] `query_graph.js hybrid-context` returns both structural neighbors and semantic matches.
