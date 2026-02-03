@@ -1,14 +1,7 @@
-require('dotenv').config({ path: '../../../../.env' });
-const neo4j = require('neo4j-driver');
+const neo4jService = require('./Neo4jService');
 const VectorService = require('./services/VectorService');
 const { program } = require('commander');
 
-// Configuration
-const DB_HOST = process.env.NEO4J_HOST || 'localhost';
-const DB_USER = process.env.NEO4J_USER || 'neo4j';
-const DB_PASS = process.env.NEO4J_PASSWORD || 'your_strong_password';
-const DB_PORT = process.env.NEO4J_PORT || '7687';
-const URI = `bolt://${DB_HOST}:${DB_PORT}`;
 const INDEX_NAME = 'function_embeddings';
 
 program
@@ -20,8 +13,7 @@ program
 const options = program.opts();
 
 async function run() {
-    const driver = neo4j.driver(URI, neo4j.auth.basic(DB_USER, DB_PASS));
-    const session = driver.session();
+    const session = neo4jService.getSession();
     const vectorService = new VectorService();
 
     try {
@@ -40,7 +32,7 @@ async function run() {
         const result = await session.run(`
             CALL db.index.vector.queryNodes('${INDEX_NAME}', ${parseInt(options.limit)}, $queryVector)
             YIELD node, score
-            RETURN node.name as name, node.file as file, node.start_line as line, score
+            RETURN node.label as name, node.file as file, node.start_line as line, score
         `, { queryVector });
 
         console.log('\n--- Search Results ---');
@@ -59,7 +51,7 @@ async function run() {
         console.error("Search failed:", e);
     } finally {
         await session.close();
-        await driver.close();
+        await neo4jService.close();
     }
 }
 

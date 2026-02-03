@@ -116,6 +116,7 @@ node .gemini/skills/graphdb/scripts/query_graph.js <command> [options]
 | **`test-context`** | List dependencies for test harnesses | `... test-context --function <name>` |
 | **`hotspots`** | Find high-risk (complex + frequent changes) code | `... hotspots --module <name>` |
 | **`globals`** | Show global variable usage | `... globals --module <name>` |
+| **`hybrid-context`** | Structural + Semantic dependencies | `... hybrid-context --function <name>` |
 
 ### Semantic Search
 Find implicit links using vector search.

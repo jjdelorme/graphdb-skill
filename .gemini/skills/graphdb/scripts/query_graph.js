@@ -74,6 +74,47 @@ const queries = {
         `, { func });
         return result.records.map(r => r.toObject());
     },
+    'hybrid-context': async (session, params) => {
+        const func = params.function;
+        if (!func) return { error: 'Missing function parameter' };
+
+        // 1. Structural Dependencies
+        const structuralResult = await session.run(`
+            MATCH (f:Function {label: $func})
+            OPTIONAL MATCH (f)-[:CALLS]->(callee:Function)
+            OPTIONAL MATCH (caller:Function)-[:CALLS]->(f)
+            RETURN 
+                collect(DISTINCT callee.label) as callees,
+                collect(DISTINCT caller.label) as callers
+        `, { func });
+        
+        const structural = structuralResult.records.length > 0 
+            ? structuralResult.records[0].toObject() 
+            : { callees: [], callers: [] };
+
+        // 2. Semantic Neighbors
+        // We first find the target embedding, then query for similar nodes
+        const semanticResult = await session.run(`
+            MATCH (target:Function {label: $func})
+            WHERE target.embedding IS NOT NULL
+            CALL db.index.vector.queryNodes('function_embeddings', 5, target.embedding)
+            YIELD node, score
+            WHERE node.label <> $func
+            RETURN node.label as name, score, node.file as file
+        `, { func });
+        
+        const semantic = semanticResult.records.map(r => ({
+            name: r.get('name'),
+            score: r.get('score'),
+            file: r.get('file')
+        }));
+
+        return {
+            function: func,
+            structural_dependencies: structural,
+            semantic_related: semantic
+        };
+    },
     'extract-service': async (session, params) => {
         const module = params.module || '.*';
         const result = await session.run(`

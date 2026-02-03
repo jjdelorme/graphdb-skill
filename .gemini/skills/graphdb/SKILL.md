@@ -1,6 +1,6 @@
 ---
 name: graphdb
-description: Expert in analyzing project architecture using a Neo4j Code Property Graph (CPG). Answers questions about dependencies, seams, testing contexts, and risks.
+description: Expert in analyzing project architecture using a Neo4j Code Property Graph (CPG) enhanced with Vector Search. Answers questions about dependencies, seams, testing contexts, implicit links, and risks.
 ---
 
 # Graph Database Skill
@@ -58,6 +58,11 @@ Find code based on semantic meaning (what it does) rather than exact syntax. Use
 *   **Command:** `node .gemini/skills/graphdb/scripts/find_implicit_links.js --query "<natural language query>"`
 *   **Example:** `node .gemini/skills/graphdb/scripts/find_implicit_links.js --query "updates inventory table"`
 *   **Output Analysis:** Returns a list of functions sorted by semantic similarity score.
+
+### 6. Hybrid Context (Refactoring Helper)
+Prepare for refactoring by finding both explicit structural dependencies and implicit semantic clones/relations.
+*   **Command:** `node .gemini/skills/graphdb/scripts/query_graph.js hybrid-context --function <function_name>`
+*   **Output Analysis:** Returns `structural_dependencies` (hard links) and `semantic_related` (potential clones/logical groupings).
 
 ## Other Available Query Types
 *   `globals`: List global variable usage.
