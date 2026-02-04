@@ -9,7 +9,7 @@ const SqlAdapter = require('./adapters/SqlAdapter');
 const AspAdapter = require('./adapters/AspAdapter');
 
 // Paths
-const ROOT_DIR = path.resolve(__dirname, '../../../');
+const ROOT_DIR = path.resolve(__dirname, '../../../../');
 const COMPILE_DB_PATH = path.join(ROOT_DIR, 'compile_commands.json');
 const OUTPUT_DIR = path.join(ROOT_DIR, '.gemini/graph_data');
 const CPP_WASM_PATH = path.join(__dirname, 'node_modules/tree-sitter-cpp/tree-sitter-cpp.wasm');

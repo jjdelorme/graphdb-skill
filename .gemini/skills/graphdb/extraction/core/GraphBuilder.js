@@ -99,7 +99,7 @@ class GraphBuilder {
                 
                 if (tree.delete) tree.delete(); // Free memory!
             } catch (e) {
-                console.error(`Error in Pass 1 for ${file}:`, e.message);
+                console.error(`Error in Pass 1 for ${file}:`, e);
             }
         }
         console.log(`Pass 1 Complete. Found ${this.definedGlobals.size} globals.`);
@@ -139,7 +139,7 @@ class GraphBuilder {
 
                 if (tree.delete) tree.delete();
             } catch (e) {
-                 console.error(`Error in Pass 2 for ${file}:`, e.message);
+                 console.error(`Error in Pass 2 for ${file}:`, e);
             }
         }
 

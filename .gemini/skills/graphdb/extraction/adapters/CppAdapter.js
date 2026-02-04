@@ -60,15 +60,30 @@ class CppAdapter {
                  });
             }
 
-            // Global Variables
-            if (node.type === 'declaration' && node.parent.type === 'translation_unit') {
-                const name = this._extractDeclarationName(node);
-                if (name) {
-                    definitions.push({
-                        name: name,
-                        type: 'Global',
-                        line: node.startPosition.row + 1
-                    });
+            // Global Variables and Function Declarations
+            if (node.type === 'declaration') {
+                if (this._isTopLevel(node)) {
+                    // 1. Variable Definitions
+                    const name = this._extractDeclarationName(node);
+                    if (name) {
+                        definitions.push({
+                            name: name,
+                            type: 'Global',
+                            line: node.startPosition.row + 1
+                        });
+                    }
+
+                    // 2. Function Declarations (Prototypes/Externs)
+                    const funcDeclName = this._extractFunctionDeclarationName(node);
+                    if (funcDeclName) {
+                         definitions.push({
+                            name: funcDeclName,
+                            type: 'Function',
+                            line: node.startPosition.row + 1,
+                            is_definition: false,
+                            complexity: 0
+                        });
+                    }
                 }
             }
 
@@ -107,6 +122,44 @@ class CppAdapter {
     }
 
     // --- Helpers ---
+
+    _isTopLevel(node) {
+        let current = node.parent;
+        while (current) {
+            if (current.type === 'function_definition' || current.type === 'lambda_expression') {
+                return false;
+            }
+            if (current.type === 'translation_unit') {
+                return true;
+            }
+            current = current.parent;
+        }
+        return true;
+    }
+
+    _extractFunctionDeclarationName(node) {
+        // Look for function_declarator inside declaration
+        // Iterative search to avoid stack overflow
+        const stack = [node];
+        
+        while (stack.length > 0) {
+            const n = stack.pop();
+            
+            if (n.type === 'function_declarator') {
+                let d = n.childForFieldName('declarator');
+                while (d && (d.type === 'pointer_declarator' || d.type === 'reference_declarator')) {
+                     d = d.childForFieldName('declarator');
+                }
+                return d ? d.text : null;
+            }
+            
+            // Push children in reverse order to preserve traversal order (optional but good)
+            for (let i = n.childCount - 1; i >= 0; i--) {
+                stack.push(n.child(i));
+            }
+        }
+        return null;
+    }
 
     _extractFunctionName(node) {
         const declarator = node.childForFieldName('declarator');
