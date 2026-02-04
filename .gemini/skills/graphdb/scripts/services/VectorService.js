@@ -1,27 +1,31 @@
-const { GoogleGenAI } = require("@google/genai");
+const { PredictionServiceClient, helpers } = require('@google-cloud/aiplatform');
 
 class VectorService {
     constructor(config = {}) {
-        if (!process.env.GOOGLE_CLOUD_PROJECT || !process.env.GOOGLE_CLOUD_LOCATION) {
-            console.warn("Missing Google Cloud configuration (GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_LOCATION).");
-        }
+        const project = process.env.GOOGLE_CLOUD_PROJECT || "jasondel-cloudrun10";
+        let location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
+        if (location === "global") location = "us-central1";
         
-        const project = process.env.GOOGLE_CLOUD_PROJECT;
-        const location = process.env.GOOGLE_CLOUD_LOCATION;
-        this.modelName = process.env.GEMINI_EMBEDDING_MODEL || "models/gemini-embedding-001";
-
-        if (config.client) {
-            this.client = config.client;
-        } else {
-            this.client = new GoogleGenAI({ vertexAI: { project, location } });
+        this.project = project;
+        this.location = location;
+        this.modelName = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+        
+        // Sanitize model name for Vertex AI
+        if (this.modelName.startsWith("models/")) {
+            this.modelName = this.modelName.replace("models/", "");
         }
+
+        this.client = config.client || new PredictionServiceClient({
+            apiEndpoint: `${this.location}-aiplatform.googleapis.com`
+        });
     }
 
     async embedDocuments(texts) {
         if (!texts || texts.length === 0) return [];
 
         const embeddings = [];
-        
+        const endpoint = `projects/${this.project}/locations/${this.location}/publishers/google/models/${this.modelName}`;
+
         for (const text of texts) {
             let attempt = 0;
             let vector = null;
@@ -29,26 +33,32 @@ class VectorService {
 
             while (attempt < maxRetries) {
                 try {
-                    const result = await this.client.models.embedContent({
-                        model: this.modelName,
-                        content: { parts: [{ text: text }] }
+                    const instance = helpers.toValue({ content: text });
+                    const [response] = await this.client.predict({
+                        endpoint,
+                        instances: [instance],
                     });
-                    
-                    if (result && result.embedding && result.embedding.values) {
-                        vector = result.embedding.values;
-                    } else if (result && result.embeddings && result.embeddings[0] && result.embeddings[0].values) {
-                         vector = result.embeddings[0].values;
+
+                    // Parse response
+                    if (response && response.predictions && response.predictions[0]) {
+                        // Some versions of the library return plain objects, others return Protobuf Structs
+                        const prediction = response.predictions[0].structValue 
+                            ? helpers.fromValue(response.predictions[0])
+                            : response.predictions[0];
+                            
+                        if (prediction.embeddings && prediction.embeddings.values) {
+                            vector = prediction.embeddings.values;
+                        }
                     }
 
-                    if (vector) {
-                        break;
-                    } else {
-                        console.warn("Unexpected embedding response structure", JSON.stringify(result));
+                    if (vector) break;
+                    else {
+                        console.warn("Unexpected embedding response structure", JSON.stringify(response));
                         break;
                     }
                 } catch (e) {
                     attempt++;
-                    const isRateLimit = e.status === 429 || e.code === 429 || e.message?.includes("Quota exceeded");
+                    const isRateLimit = e.code === 8 || e.message?.includes("Quota exceeded") || e.message?.includes("429");
                     
                     if (isRateLimit && attempt < maxRetries) {
                         const delay = Math.pow(2, attempt) * 1000;
@@ -56,7 +66,7 @@ class VectorService {
                         continue;
                     }
                     
-                    console.error("Error generating embedding:", e.message);
+                    console.error(`Error generating embedding (Model: ${this.modelName}, Project: ${this.project}, Location: ${this.location}):`, e.message);
                     break;
                 }
             }

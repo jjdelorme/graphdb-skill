@@ -10,29 +10,35 @@ const VectorService = require('../scripts/services/VectorService');
 
 describe('VectorService', () => {
     let mockClient;
-    let mockEmbedContent;
+    let mockPredict;
 
     before(() => {
         process.env.GOOGLE_CLOUD_PROJECT = 'test-project';
         process.env.GOOGLE_CLOUD_LOCATION = 'us-central1';
-        process.env.GEMINI_EMBEDDING_MODEL = 'models/gemini-embedding-001';
+        process.env.GEMINI_EMBEDDING_MODEL = 'gemini-embedding-001';
     });
 
     beforeEach(() => {
-        mockEmbedContent = mock.fn(async () => ({
-            embedding: { values: [0.1, 0.2, 0.3] }
-        }));
+        mockPredict = mock.fn(async () => {
+            // Mocking the structure of PredictionServiceClient response
+            return [{
+                predictions: [{
+                    embeddings: {
+                        values: [0.1, 0.2, 0.3]
+                    }
+                }]
+            }];
+        });
         mockClient = {
-            models: {
-                embedContent: mockEmbedContent
-            }
+            predict: mockPredict
         };
     });
 
     test('Test 1: Configuration - initializes with correct params', async () => {
         const service = new VectorService({ client: mockClient });
         assert.ok(service);
-        assert.strictEqual(service.modelName, 'models/gemini-embedding-001');
+        assert.strictEqual(service.modelName, 'gemini-embedding-001');
+        assert.strictEqual(service.project, 'test-project');
     });
 
     test('Test 2: Embedding Generation - returns vector for single string', async () => {
@@ -42,33 +48,34 @@ describe('VectorService', () => {
 
         const result = await service.embedDocuments([input]);
         assert.deepStrictEqual(result[0], expectedVector);
-        assert.strictEqual(mockEmbedContent.mock.callCount(), 1);
+        assert.strictEqual(mockPredict.mock.callCount(), 1);
     });
 
-    test('Test 3: Rate Limit Handling (429) - retries on failure', async () => {
-        // Setup: Fail twice with 429, then succeed
+    test('Test 3: Rate Limit Handling (Retries) - retries on failure', async () => {
         let callCount = 0;
-        mockEmbedContent = mock.fn(async () => {
+        mockPredict = mock.fn(async () => {
             callCount++;
             if (callCount <= 2) {
                 const error = new Error("Quota exceeded");
-                error.status = 429; 
-                // Google libraries sometimes use 'code' or 'status'
-                error.code = 429;
+                error.code = 8; // gRPC Resource Exhausted (429)
                 throw error;
             }
-            return { embedding: { values: [0.9, 0.9, 0.9] } };
+            return [{
+                predictions: [{
+                    embeddings: {
+                        values: [0.9, 0.9, 0.9]
+                    }
+                }]
+            }];
         });
         
-        mockClient = { models: { embedContent: mockEmbedContent } };
+        mockClient = { predict: mockPredict };
         const service = new VectorService({ client: mockClient });
-        
-        // Inject a fast sleep to keep tests fast
         service.sleep = async () => {}; 
 
         const result = await service.embedDocuments(["Retry Me"]);
         
-        assert.strictEqual(callCount, 3, "Should have called 3 times (2 fails + 1 success)");
-        assert.deepStrictEqual(result[0], [0.9, 0.9, 0.9], "Should eventually return the vector");
+        assert.strictEqual(callCount, 3);
+        assert.deepStrictEqual(result[0], [0.9, 0.9, 0.9]);
     });
 });
