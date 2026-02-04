@@ -1,0 +1,10 @@
+{
+  "name": "neo4j-manager-skill",
+  "version": "1.0.0",
+  "description": "Skill for managing Neo4j Community Edition databases (switch/list)",
+  "main": "scripts/list_databases.js",
+  "dependencies": {
+    "neo4j-driver": "^5.15.0",
+    "dotenv": "^16.3.1"
+  }
+}
