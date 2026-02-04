@@ -10,7 +10,7 @@ const VectorService = require('../scripts/services/VectorService');
 
 describe('VectorService', () => {
     let mockClient;
-    let mockPredict;
+    let mockEmbedContent;
 
     before(() => {
         process.env.GOOGLE_CLOUD_PROJECT = 'test-project';
@@ -19,18 +19,17 @@ describe('VectorService', () => {
     });
 
     beforeEach(() => {
-        mockPredict = mock.fn(async () => {
-            // Mocking the structure of PredictionServiceClient response
-            return [{
-                predictions: [{
-                    embeddings: {
-                        values: [0.1, 0.2, 0.3]
-                    }
+        mockEmbedContent = mock.fn(async () => {
+            return {
+                embeddings: [{
+                    values: [0.1, 0.2, 0.3]
                 }]
-            }];
+            };
         });
         mockClient = {
-            predict: mockPredict
+            models: {
+                embedContent: mockEmbedContent
+            }
         };
     });
 
@@ -48,28 +47,26 @@ describe('VectorService', () => {
 
         const result = await service.embedDocuments([input]);
         assert.deepStrictEqual(result[0], expectedVector);
-        assert.strictEqual(mockPredict.mock.callCount(), 1);
+        assert.strictEqual(mockEmbedContent.mock.callCount(), 1);
     });
 
     test('Test 3: Rate Limit Handling (Retries) - retries on failure', async () => {
         let callCount = 0;
-        mockPredict = mock.fn(async () => {
+        mockEmbedContent = mock.fn(async () => {
             callCount++;
             if (callCount <= 2) {
                 const error = new Error("Quota exceeded");
-                error.code = 8; // gRPC Resource Exhausted (429)
+                error.status = 429; 
                 throw error;
             }
-            return [{
-                predictions: [{
-                    embeddings: {
-                        values: [0.9, 0.9, 0.9]
-                    }
+            return {
+                embeddings: [{
+                    values: [0.9, 0.9, 0.9]
                 }]
-            }];
+            };
         });
         
-        mockClient = { predict: mockPredict };
+        mockClient = { models: { embedContent: mockEmbedContent } };
         const service = new VectorService({ client: mockClient });
         service.sleep = async () => {}; 
 

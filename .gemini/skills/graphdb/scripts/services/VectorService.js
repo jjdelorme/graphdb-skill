@@ -1,4 +1,4 @@
-const { PredictionServiceClient, helpers } = require('@google-cloud/aiplatform');
+const { GoogleGenAI } = require('@google/genai');
 
 class VectorService {
     constructor(config = {}) {
@@ -15,17 +15,22 @@ class VectorService {
             this.modelName = this.modelName.replace("models/", "");
         }
 
-        this.client = config.client || new PredictionServiceClient({
-            apiEndpoint: `${this.location}-aiplatform.googleapis.com`
-        });
+        if (config.client) {
+            this.client = config.client;
+        } else {
+            this.client = new GoogleGenAI({
+                vertexai: true,
+                project: this.project,
+                location: this.location
+            });
+        }
     }
 
     async embedDocuments(texts) {
         if (!texts || texts.length === 0) return [];
 
         const embeddings = [];
-        const endpoint = `projects/${this.project}/locations/${this.location}/publishers/google/models/${this.modelName}`;
-
+        
         for (const text of texts) {
             let attempt = 0;
             let vector = null;
@@ -33,32 +38,25 @@ class VectorService {
 
             while (attempt < maxRetries) {
                 try {
-                    const instance = helpers.toValue({ content: text });
-                    const [response] = await this.client.predict({
-                        endpoint,
-                        instances: [instance],
+                    const result = await this.client.models.embedContent({
+                        model: this.modelName,
+                        contents: [{ parts: [{ text: text }] }]
                     });
-
-                    // Parse response
-                    if (response && response.predictions && response.predictions[0]) {
-                        // Some versions of the library return plain objects, others return Protobuf Structs
-                        const prediction = response.predictions[0].structValue 
-                            ? helpers.fromValue(response.predictions[0])
-                            : response.predictions[0];
-                            
-                        if (prediction.embeddings && prediction.embeddings.values) {
-                            vector = prediction.embeddings.values;
-                        }
+                    
+                    if (result && result.embedding && result.embedding.values) {
+                        vector = result.embedding.values;
+                    } else if (result && result.embeddings && result.embeddings[0] && result.embeddings[0].values) {
+                         vector = result.embeddings[0].values;
                     }
 
                     if (vector) break;
                     else {
-                        console.warn("Unexpected embedding response structure", JSON.stringify(response));
+                        console.warn("Unexpected embedding response structure", JSON.stringify(result));
                         break;
                     }
                 } catch (e) {
                     attempt++;
-                    const isRateLimit = e.code === 8 || e.message?.includes("Quota exceeded") || e.message?.includes("429");
+                    const isRateLimit = e.status === 429 || e.code === 429 || e.message?.includes("Quota exceeded");
                     
                     if (isRateLimit && attempt < maxRetries) {
                         const delay = Math.pow(2, attempt) * 1000;
