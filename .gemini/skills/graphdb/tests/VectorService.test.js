@@ -48,6 +48,27 @@ describe('VectorService', () => {
         const result = await service.embedDocuments([input]);
         assert.deepStrictEqual(result[0], expectedVector);
         assert.strictEqual(mockEmbedContent.mock.callCount(), 1);
+        
+        // Verify default outputDimensionality is enforced
+        const callArgs = mockEmbedContent.mock.calls[0].arguments[0];
+        assert.strictEqual(callArgs.outputDimensionality, 768, 'Should default to 768 dimensions');
+    });
+
+    test('Test 4: Configuration - respects custom dimensions', async () => {
+        const originalDim = process.env.GEMINI_EMBEDDING_DIMENSIONS;
+        process.env.GEMINI_EMBEDDING_DIMENSIONS = '128';
+        
+        try {
+            const service = new VectorService({ client: mockClient });
+            assert.strictEqual(service.dimensions, 128);
+            
+            await service.embedDocuments(["test"]);
+            const callArgs = mockEmbedContent.mock.calls[0].arguments[0];
+            assert.strictEqual(callArgs.outputDimensionality, 128, 'Should use configured dimensions');
+        } finally {
+            if (originalDim) process.env.GEMINI_EMBEDDING_DIMENSIONS = originalDim;
+            else delete process.env.GEMINI_EMBEDDING_DIMENSIONS;
+        }
     });
 
     test('Test 3: Rate Limit Handling (Retries) - retries on failure', async () => {

@@ -36,9 +36,10 @@ int main() {
 
   test('should parse source code', async () => {
     await adapter.init();
-    const tree = adapter.parse(sourceCode);
-    assert.ok(tree);
-    assert.strictEqual(tree.rootNode.type, 'translation_unit');
+    const result = adapter.parse(sourceCode);
+    assert.strictEqual(result.type, 'single');
+    assert.ok(result.tree);
+    assert.strictEqual(result.tree.rootNode.type, 'translation_unit');
   });
 
   test('should scan definitions (Classes)', async () => {

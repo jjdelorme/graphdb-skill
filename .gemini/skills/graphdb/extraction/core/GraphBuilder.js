@@ -97,7 +97,16 @@ class GraphBuilder {
                     }
                 }
                 
-                if (tree.delete) tree.delete(); // Free memory!
+                // Cleanup
+                if (tree.type === 'single' && tree.tree && tree.tree.delete) {
+                    tree.tree.delete();
+                } else if (tree.type === 'chunked' && tree.chunks) {
+                    tree.chunks.forEach(chunk => {
+                        if (chunk.tree && chunk.tree.delete) chunk.tree.delete();
+                    });
+                } else if (tree.delete) {
+                    tree.delete();
+                }
             } catch (e) {
                 console.error(`Error in Pass 1 for ${file}:`, e);
             }
@@ -137,7 +146,16 @@ class GraphBuilder {
                     }
                 }
 
-                if (tree.delete) tree.delete();
+                // Cleanup
+                if (tree.type === 'single' && tree.tree && tree.tree.delete) {
+                    tree.tree.delete();
+                } else if (tree.type === 'chunked' && tree.chunks) {
+                    tree.chunks.forEach(chunk => {
+                        if (chunk.tree && chunk.tree.delete) chunk.tree.delete();
+                    });
+                } else if (tree.delete) {
+                    tree.delete();
+                }
             } catch (e) {
                  console.error(`Error in Pass 2 for ${file}:`, e);
             }

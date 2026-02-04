@@ -4,7 +4,7 @@ const path = require('path');
 const VectorService = require('./services/VectorService');
 
 // Neo4j Vector Config
-const VECTOR_DIMENSIONS = 768; // Gemini Embedding 001
+const VECTOR_DIMENSIONS = parseInt(process.env.GEMINI_EMBEDDING_DIMENSIONS || "768", 10);
 const INDEX_NAME = 'function_embeddings';
 const BATCH_SIZE = 50; // Processing batch size
 

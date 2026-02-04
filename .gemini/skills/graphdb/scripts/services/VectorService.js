@@ -14,6 +14,8 @@ class VectorService {
         if (this.modelName.startsWith("models/")) {
             this.modelName = this.modelName.replace("models/", "");
         }
+        
+        this.dimensions = parseInt(process.env.GEMINI_EMBEDDING_DIMENSIONS || "768", 10);
 
         if (config.client) {
             this.client = config.client;
@@ -40,7 +42,8 @@ class VectorService {
                 try {
                     const result = await this.client.models.embedContent({
                         model: this.modelName,
-                        contents: [{ parts: [{ text: text }] }]
+                        contents: [{ parts: [{ text: text }] }],
+                        outputDimensionality: this.dimensions
                     });
                     
                     if (result && result.embedding && result.embedding.values) {
