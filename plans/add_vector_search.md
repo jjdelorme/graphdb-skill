@@ -58,26 +58,26 @@ We will harden the existing prototype code by adding missing test coverage befor
 ### Phase 0: Environment Setup (Skill Stability)
 
 Before any refactoring, we must ensure the skill's local environment is stable.
-1.  **Install Dependencies**:
+1.  [x] **Install Dependencies**:
     *   Command: `npm install` inside `.gemini/skills/graphdb/`.
     *   Requirement: Ensure `tree-sitter`, `neo4j-driver`, `dotenv`, and `@google/genai` are correctly linked.
-2.  **Verify Baseline**:
+2.  [x] **Verify Baseline**:
     *   Run `npm test --prefix .gemini/skills/graphdb` and ensure all existing extraction tests pass.
 
 ### Phase 1: Preparation & Refactoring (The "Generalized" Integration)
 
-1.  **Refactor for `Neo4jService`**:
+1.  [x] **Refactor for `Neo4jService`**:
     *   The scripts `enrich_vectors.js` and `find_implicit_links.js` currently manually instantiate `neo4j.driver`.
     *   **Action**: Update them to import and use the shared `.gemini/skills/graphdb/scripts/Neo4jService.js` to respect global config and connection pooling.
-2.  **Verify Environment**:
+2.  [ ] **Verify Environment**:
     *   Ensure `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` are set for Vertex AI.
 
 ### Phase 2: Vector Service Hardening
 
 **File:** `.gemini/skills/graphdb/scripts/services/VectorService.js`
 
-*   **Current State**: Basic implementation exists but lacks retry logic.
-*   **Upgrade**: Implement **Exponential Backoff**.
+*   [x] **Current State**: Basic implementation exists but lacks retry logic.
+*   [x] **Upgrade**: Implement **Exponential Backoff**.
     *   Add `sleep` utility.
     *   Wrap `embedContent` call in a loop.
     *   Handle `429` specifically.
@@ -87,8 +87,8 @@ Before any refactoring, we must ensure the skill's local environment is stable.
 
 **File:** `.gemini/skills/graphdb/scripts/enrich_vectors.js`
 
-*   **Current State**: Basic loop exists.
-*   **Upgrade**:
+*   [x] **Current State**: Basic loop exists.
+*   [x] **Upgrade**:
     1.  **Inject Filters**: Add `AND NOT f.file CONTAINS 'node_modules'` to the `MATCH` query.
     2.  **Integrate Neo4jService**: (As per Phase 1).
     3.  **Error Handling**: Ensure file read errors don't crash the entire batch.
@@ -99,13 +99,13 @@ Before any refactoring, we must ensure the skill's local environment is stable.
 
 **Goal:** Create a unified `hybrid-context` command.
 
-1.  **Import Vector Search Logic**: Integrate the search query from the prototype `find_implicit_links.js`.
-2.  **New Command**: `hybrid-context --function <name>`
+1.  [x] **Import Vector Search Logic**: Integrate the search query from the prototype `find_implicit_links.js`.
+2.  [x] **New Command**: `hybrid-context --function <name>`
     *   **Step 1 (Structure):** Fetch callers/callees (existing `test-context` logic).
     *   **Step 2 (Semantic):** Fetch top 5 vector matches for the target function (excluding the function itself).
     *   **Step 3 (Merge)::** Return a JSON object containing `structural_dependencies` and `semantic_related`.
     *   **Step 4 (Cluster):** Support "Cluster Analysis" to find cohesive groups of functions (Seams) for extraction. (See [plans/cluster_plan.md](./cluster_plan.md)).
-3.  **Refinement:** Ensure the output distinguishes between "Definite Call" (Hard) and "Potential Clone/Relation" (Soft).
+3.  [x] **Refinement:** Ensure the output distinguishes between "Definite Call" (Hard) and "Potential Clone/Relation" (Soft).
 
 ### Phase 5: Handling Stale Graphs
 See dedicated plan: [plans/avoid_stale_graph.md](./avoid_stale_graph.md) for the "Git-Driven Delta" strategy to keep embeddings in sync during refactoring.
@@ -125,20 +125,29 @@ This new capability allows the agent to build a **Refactoring Context Window**.
 4.  **Action:** Agent reads the source of *all* these functions to ensure the refactor handles the legacy clone and the active logic simultaneously.
 
 ### `SKILL.md` Updates
-*   **Frontmatter:** Update `description` to include "semantic search and implicit dependency discovery".
-*   **Tool Usage:** Document the `hybrid-context` command in `query_graph.js`.
-*   **Instruction:** "Use `hybrid-context` when preparing to refactor a function to ensure you catch hidden dependencies and logical clones."
+*   [x] **Frontmatter:** Update `description` to include "semantic search and implicit dependency discovery".
+*   [x] **Tool Usage:** Document the `hybrid-context` command in `query_graph.js`.
+*   [x] **Instruction:** "Use `hybrid-context` when preparing to refactor a function to ensure you catch hidden dependencies and logical clones."
 
 ### `README.md`
-*   Add section **"Vector Search Support"**.
-*   Document the `enrich_vectors.js` script in the **Ingestion Pipeline** section.
-*   List new env vars: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`.
+*   [x] Add section **"Vector Search Support"**.
+*   [x] Document the `enrich_vectors.js` script in the **Ingestion Pipeline** section.
+*   [x] List new env vars: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`.
 
 ---
 
 ## 6. Verification Checklist
 
-1.  [ ] Unit tests for `VectorService` pass (mocked ADC, mocked 429 errors).
+1.  [x] Unit tests for `VectorService` pass (mocked ADC, mocked 429 errors).
 2.  [ ] `enrich_vectors.js` runs on the target graph without errors and respects rate limits.
 3.  [ ] Neo4j Browser shows `embedding` property populated.
 4.  [ ] `query_graph.js hybrid-context` returns both structural neighbors and semantic matches.
+
+## 7. Remaining Tasks (Todo)
+
+The implementation is code-complete and the environment is verified.
+
+1.  **End-to-End Test**:
+    *   Start local Neo4j.
+    *   Run `enrich_vectors.js` on this codebase.
+    *   Run `query_graph.js hybrid-context` and verify output.

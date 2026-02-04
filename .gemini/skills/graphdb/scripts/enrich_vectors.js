@@ -61,8 +61,8 @@ async function run() {
                 id: r.get('id'),
                 name: r.get('name'),
                 file: r.get('file'),
-                start: r.get('start').toNumber(),
-                end: r.get('end').toNumber()
+                start: neo4jService.toNum(r.get('start')),
+                end: neo4jService.toNum(r.get('end'))
             }));
 
             console.log(`Processing batch ${++batchCount} (${batch.length} items)...`);

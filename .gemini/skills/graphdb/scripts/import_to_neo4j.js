@@ -39,7 +39,7 @@ async function run() {
         // Fallback doesn't need retry logic as it's already a fallback
         while (true) {
             const result = await session.run('MATCH (n) WITH n LIMIT 10000 DETACH DELETE n RETURN count(n) as c');
-            const count = result.records[0].get('c').toNumber();
+            const count = neo4jService.toNum(result.records[0].get('c'));
             console.log(`Deleted ${count} nodes...`);
             if (count === 0) break;
         }
@@ -132,8 +132,8 @@ async function run() {
     const countResult = await runWithRetry(session, 'MATCH (n) RETURN count(n) as c');
     const edgeResult = await runWithRetry(session, 'MATCH ()-[r]->() RETURN count(r) as c');
     console.log('Final Verification:');
-    console.log(`Total Nodes in DB: ${countResult.records[0].get('c')}`);
-    console.log(`Total Edges in DB: ${edgeResult.records[0].get('c')}`);
+    console.log(`Total Nodes in DB: ${neo4jService.toNum(countResult.records[0].get('c'))}`);
+    console.log(`Total Edges in DB: ${neo4jService.toNum(edgeResult.records[0].get('c'))}`);
 
   } catch (error) {
     console.error('Error during import:', error);

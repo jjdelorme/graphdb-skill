@@ -21,6 +21,13 @@ class Neo4jService {
     }
 
     _loadEnv() {
+        // Try explicit path first (4 levels up from scripts/)
+        const explicitPath = path.resolve(__dirname, '../../../../.env');
+        if (fs.existsSync(explicitPath)) {
+            require('dotenv').config({ path: explicitPath });
+            return;
+        }
+
         let currentPath = process.cwd();
         for (let i = 0; i < 5; i++) {
             const envPath = path.join(currentPath, '.env');
@@ -32,6 +39,15 @@ class Neo4jService {
             if (parent === currentPath) break;
             currentPath = parent;
         }
+    }
+
+    /**
+     * Safely converts a value to a number, handling Neo4j Integer types.
+     */
+    toNum(val) {
+        if (val === null || val === undefined) return null;
+        if (typeof val.toNumber === 'function') return val.toNumber();
+        return Number(val);
     }
 
     getSession() {

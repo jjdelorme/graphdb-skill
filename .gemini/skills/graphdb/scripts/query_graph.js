@@ -204,9 +204,11 @@ async function main() {
     const session = neo4jService.getSession();
     try {
         const result = await queries[type](session, params);
-        console.log(JSON.stringify(result, (key, value) => 
-            typeof value === 'bigint' ? value.toString() : value
-        , 2));
+        console.log(JSON.stringify(result, (key, value) => {
+            if (typeof value === 'bigint') return value.toString();
+            if (value && typeof value.toNumber === 'function') return value.toNumber();
+            return value;
+        }, 2));
     } catch (error) {
         console.error('Query Error:', error);
     } finally {

@@ -1,15 +1,7 @@
-require('dotenv').config({ path: '../../../../.env' });
-const neo4j = require('neo4j-driver');
+const neo4jService = require('./Neo4jService');
 
 async function main() {
-    const DB_HOST = process.env.NEO4J_HOST || 'localhost';
-    const DB_USER = process.env.NEO4J_USER || 'neo4j';
-    const DB_PASS = process.env.NEO4J_PASSWORD || 'neo4j';
-    const DB_PORT = process.env.NEO4J_PORT || '7687';
-
-    const URI = `bolt://${DB_HOST}:${DB_PORT}`;
-    const driver = neo4j.driver(URI, neo4j.auth.basic(DB_USER, DB_PASS));
-    const session = driver.session();
+    const session = neo4jService.getSession();
 
     try {
         console.log('Linking functions to classes based on label (ClassName::MethodName)...');
@@ -71,7 +63,7 @@ async function main() {
                 SET f.ui_contaminated = true
                 RETURN count(f) as updated
             `);
-            const updated = result.records[0].get('updated').toNumber();
+            const updated = neo4jService.toNum(result.records[0].get('updated'));
             console.log(`  Iteration ${iteration}: updated ${updated} functions`);
             changed = updated > 0;
         }
@@ -93,15 +85,15 @@ async function main() {
                 sum(CASE WHEN f.pure_business_logic THEN 1 ELSE 0 END) as pure
         `);
         const rec = stats.records[0];
-        console.log(`Total Functions: ${rec.get('total')}`);
-        console.log(`Contaminated: ${rec.get('contaminated')}`);
-        console.log(`Pure: ${rec.get('pure')}`);
+        console.log(`Total Functions: ${neo4jService.toNum(rec.get('total'))}`);
+        console.log(`Contaminated: ${neo4jService.toNum(rec.get('contaminated'))}`);
+        console.log(`Pure: ${neo4jService.toNum(rec.get('pure'))}`);
 
     } catch (error) {
         console.error('Error:', error);
     } finally {
         await session.close();
-        await driver.close();
+        await neo4jService.close();
     }
 }
 

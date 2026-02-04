@@ -1,18 +1,11 @@
-require('dotenv').config({ path: '../../../../.env' });
 const { execSync } = require('child_process');
-const neo4j = require('neo4j-driver');
+const neo4jService = require('./Neo4jService');
 const path = require('path');
 const fs = require('fs');
 
 async function main() {
     console.log('Starting git history analysis...');
 
-    const DB_HOST = process.env.NEO4J_HOST || 'localhost';
-    const DB_USER = process.env.NEO4J_USER || 'neo4j';
-    const DB_PASS = process.env.NEO4J_PASSWORD || 'neo4j'; // Standard fallback
-    const DB_PORT = process.env.NEO4J_PORT || '7687';
-
-    const URI = `bolt://${DB_HOST}:${DB_PORT}`;
     // The repository path is the project root (4 levels up from .gemini/skills/graphdb/scripts/)
     const repoPath = path.resolve(__dirname, '../../../../');
     
@@ -89,8 +82,7 @@ async function main() {
     console.log(`Found ${filteredCoChanges.length} co-change pairs with threshold >= 5.`);
 
     // 3. Update Neo4j
-    const driver = neo4j.driver(URI, neo4j.auth.basic(DB_USER, DB_PASS));
-    const session = driver.session();
+    const session = neo4jService.getSession();
 
     try {
         console.log('Updating File nodes with change_frequency...');
@@ -134,7 +126,7 @@ async function main() {
         console.error('Error updating Neo4j:', error);
     } finally {
         await session.close();
-        await driver.close();
+        await neo4jService.close();
     }
 }
 

@@ -4,7 +4,6 @@
   "description": "General purpose GraphDB skill for Gemini CLI",
   "main": "scripts/query_graph.js",
   "dependencies": {
-    "@google-cloud/aiplatform": "^6.4.0",
     "@google/genai": "^1.39.0",
     "dotenv": "^17.2.3",
     "glob": "^13.0.0",
