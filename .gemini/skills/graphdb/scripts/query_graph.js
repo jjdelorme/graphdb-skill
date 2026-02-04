@@ -68,6 +68,14 @@ const queries = {
     'test-context': async (session, params) => {
         const func = params.function;
         if (!func) return { error: 'Missing function parameter' };
+
+        // Check existence first
+        const check = await session.run(`MATCH (f:Function {label: $func}) RETURN f`, { func });
+        if (check.records.length === 0) {
+            console.error(`Function '${func}' not found in graph.`);
+            return [];
+        }
+
         const result = await session.run(`
             MATCH (f:Function {label: $func})-[:CALLS|USES_GLOBAL]->(dep)
             RETURN dep.label as dependency, dep.type as type, labels(dep) as labels

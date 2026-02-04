@@ -13,15 +13,96 @@ class CppAdapter {
     }
 
     parse(sourceCode) {
-        return this.parser.parse(sourceCode);
+        // Safety: Truncate excessively large files (hard limit 1MB to prevent OOM)
+        if (sourceCode.length > 1024 * 1024) {
+            console.warn('[CppAdapter] File too large (1MB+), truncating.');
+            sourceCode = sourceCode.substring(0, 1024 * 1024);
+        }
+
+        // Automatic Chunking for files > 30k chars (Tree-sitter 16-bit limit workaround)
+        if (sourceCode.length > 30000) {
+            console.log(`[CppAdapter] Large file detected (${sourceCode.length} chars). Using Chunking Strategy.`);
+            return this._parseChunks(sourceCode);
+        }
+
+        try {
+            const tree = this.parser.parse(sourceCode);
+            return { type: 'single', tree: tree, source: sourceCode };
+        } catch (e) {
+            console.warn(`[CppAdapter] Tree-sitter parse failed: ${e.message}. Falling back to Regex scan.`);
+            return { type: 'fallback', source: sourceCode };
+        }
+    }
+
+    _parseChunks(source) {
+        const chunks = [];
+        // Split by "}\n" which is a common top-level delimiter in C/C++
+        // We look for a closing brace at the start of a line or followed by newline
+        const rawChunks = source.split(/\n}\s*\n/); 
+        
+        let lineOffset = 0;
+        for (const rawChunk of rawChunks) {
+            const chunkContent = rawChunk + "\n}\n"; // Re-add delimiter
+            const chunkLines = chunkContent.split('\n').length - 1; // Approx
+            
+            try {
+                // Parse chunk individually
+                const tree = this.parser.parse(chunkContent);
+                chunks.push({ 
+                    tree: tree, 
+                    lineOffset: lineOffset,
+                    valid: true
+                });
+            } catch (e) {
+                chunks.push({
+                    source: chunkContent,
+                    lineOffset: lineOffset,
+                    valid: false
+                });
+            }
+            
+            lineOffset += chunkLines;
+        }
+        
+        return { type: 'chunked', chunks: chunks };
     }
 
     /**
      * Pass 1: Identify Definitions
      */
-    scanDefinitions(tree) {
+    scanDefinitions(parseResult) {
+        if (parseResult.type === 'fallback') {
+            return this._scanDefinitionsRegex(parseResult.source);
+        }
+
+        const allDefinitions = [];
+
+        if (parseResult.type === 'single') {
+            return this._scanTreeDefinitions(parseResult.tree, 0);
+        }
+
+        if (parseResult.type === 'chunked') {
+            for (const chunk of parseResult.chunks) {
+                if (chunk.valid) {
+                    const defs = this._scanTreeDefinitions(chunk.tree, chunk.lineOffset);
+                    allDefinitions.push(...defs);
+                } else {
+                    // Fallback for this specific chunk
+                    const defs = this._scanDefinitionsRegex(chunk.source);
+                    defs.forEach(d => { 
+                        d.line += chunk.lineOffset; 
+                        d.end_line += chunk.lineOffset; 
+                    });
+                    allDefinitions.push(...defs);
+                }
+            }
+        }
+
+        return allDefinitions;
+    }
+
+    _scanTreeDefinitions(tree, lineOffset) {
         const definitions = [];
-        
         const visit = (node) => {
             // Function Definitions
             if (node.type === 'function_definition') {
@@ -30,15 +111,14 @@ class CppAdapter {
                     definitions.push({
                         name: funcName,
                         type: 'Function',
-                        line: node.startPosition.row + 1,
-                        end_line: node.endPosition.row + 1,
+                        line: node.startPosition.row + 1 + lineOffset,
+                        end_line: node.endPosition.row + 1 + lineOffset,
                         complexity: this._calculateComplexity(node)
                     });
                 }
             }
-
             // Class Definitions
-            if (node.type === 'class_specifier' || node.type === 'struct_specifier') {
+            else if (node.type === 'class_specifier' || node.type === 'struct_specifier') {
                  const nameNode = node.childForFieldName('name');
                  const className = nameNode ? nameNode.text : 'anonymous';
                  
@@ -53,43 +133,36 @@ class CppAdapter {
                  }
 
                  definitions.push({
-                     name: className,
+                     name: this._truncateLabel(className),
                      type: 'Class',
-                     line: node.startPosition.row + 1,
+                     line: node.startPosition.row + 1 + lineOffset,
                      inherits: inherits
                  });
             }
-
-            // Global Variables and Function Declarations
-            if (node.type === 'declaration') {
-                if (this._isTopLevel(node)) {
-                    // 1. Variable Definitions
-                    const name = this._extractDeclarationName(node);
-                    if (name) {
-                        definitions.push({
-                            name: name,
-                            type: 'Global',
-                            line: node.startPosition.row + 1
-                        });
-                    }
-
-                    // 2. Function Declarations (Prototypes/Externs)
-                    const funcDeclName = this._extractFunctionDeclarationName(node);
-                    if (funcDeclName) {
-                         definitions.push({
-                            name: funcDeclName,
-                            type: 'Function',
-                            line: node.startPosition.row + 1,
-                            is_definition: false,
-                            complexity: 0
-                        });
-                    }
+            // Declarations
+            else if (node.type === 'declaration' && this._isTopLevel(node)) {
+                const name = this._extractDeclarationName(node);
+                if (name) {
+                    definitions.push({
+                        name: name,
+                        type: 'Global',
+                        line: node.startPosition.row + 1 + lineOffset
+                    });
+                }
+                const funcDeclName = this._extractFunctionDeclarationName(node);
+                if (funcDeclName) {
+                     definitions.push({
+                        name: funcDeclName,
+                        type: 'Function',
+                        line: node.startPosition.row + 1 + lineOffset,
+                        is_definition: false,
+                        complexity: 0
+                    });
                 }
             }
 
             for (let i = 0; i < node.childCount; i++) visit(node.child(i));
         };
-
         visit(tree.rootNode);
         return definitions;
     }
@@ -97,9 +170,29 @@ class CppAdapter {
     /**
      * Pass 2: Identify References
      */
-    scanReferences(tree, knownGlobals) {
-        const references = [];
+    scanReferences(parseResult, knownGlobals) {
+        if (parseResult.type === 'fallback') return []; 
+
+        const allReferences = [];
         
+        if (parseResult.type === 'single') {
+            return this._scanTreeReferences(parseResult.tree, knownGlobals);
+        }
+
+        if (parseResult.type === 'chunked') {
+            for (const chunk of parseResult.chunks) {
+                if (chunk.valid) {
+                    const refs = this._scanTreeReferences(chunk.tree, knownGlobals);
+                    allReferences.push(...refs);
+                }
+            }
+        }
+        
+        return allReferences;
+    }
+
+    _scanTreeReferences(tree, knownGlobals) {
+        const references = [];
         const visit = (node) => {
              if (node.type === 'function_definition') {
                  const funcName = this._extractFunctionName(node);
@@ -111,17 +204,57 @@ class CppAdapter {
                          this._scanBodyForRefs(body, funcName, localScope, knownGlobals, references);
                      }
                  }
-                 return; // Do not descend into nested functions (lambdas handled in body scan?)
+                 return; 
              }
-             
              for (let i = 0; i < node.childCount; i++) visit(node.child(i));
         };
-        
         visit(tree.rootNode);
         return references;
     }
 
     // --- Helpers ---
+
+    _truncateLabel(label) {
+        if (!label) return label;
+        if (label.length > 128) return label.substring(0, 125) + '...';
+        return label;
+    }
+
+
+    // --- Helpers ---
+
+    _scanDefinitionsRegex(source) {
+        const definitions = [];
+        const lines = source.split(/\r?\n/);
+        
+        // Regex to capture: ReturnType FunctionName(Args)
+        // Group 2 is the function name
+        const funcRegex = /^\s*(?:(?:virtual|static|inline|friend)\s+)*(?:(?:[\w:*&<>]|::)+\s+)+([*&]?\w+)\s*\(/;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.trim().startsWith('//')) continue;
+            if (line.trim().startsWith('#')) continue; 
+
+            const match = line.match(funcRegex);
+            if (match) {
+                // Ensure it's not a control structure like "if ("
+                const name = match[1].replace(/[*&]/g, ''); // Remove pointer/ref chars if caught
+                if (['if', 'while', 'for', 'switch', 'catch'].includes(name)) continue;
+
+                // Basic heuristic: check if line ends with '{' or just assumes it's a definition if it looks like one
+                // This is "optimistic" scanning
+                definitions.push({
+                    name: name,
+                    type: 'Function',
+                    line: i + 1,
+                    end_line: i + 1, // Cannot determine end reliably
+                    complexity: 1
+                });
+            }
+        }
+        return definitions;
+    }
 
     _isTopLevel(node) {
         let current = node.parent;
@@ -171,7 +304,7 @@ class CppAdapter {
              const sub = d.childForFieldName('declarator');
              if (sub) d = sub; else break;
         }
-        return d.text;
+        return this._truncateLabel(d.text);
     }
 
     _extractDeclarationName(node) {
@@ -188,7 +321,7 @@ class CppAdapter {
                  name = declarator.text;
              }
         }
-        return name ? name.replace(/[*&]/g, '').trim() : null;
+        return name ? this._truncateLabel(name.replace(/[*&]/g, '').trim()) : null;
     }
 
     _calculateComplexity(node) {
