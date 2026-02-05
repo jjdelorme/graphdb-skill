@@ -107,14 +107,15 @@ Retrieve actual source code or pinpoint usage locations using graph metadata.
 *   **Use Case:** Identifying exact lines where a global variable is modified.
 
 ## Other Available Query Types
-*   `globals`: List global variable usage.
-*   `extract-service`: Suggest functions for service extraction.
-*   `impact`: Analyze impact of changes (reverse dependencies).
-*   `co-change`: Find files that frequently change together.
-*   `progress`: Check refactoring progress stats.
-*   `function`: Get raw metadata for a function.
+*   `globals`: List global variable usage. (Flag: `--module <name>`)
+*   `extract-service`: Suggest functions for service extraction. (Flag: `--module <name>`)
+*   `impact`: Analyze impact of changes (reverse dependencies). (Flag: `--function <name>`)
+*   `co-change`: Find files that frequently change together. (Flag: `--file <path>`)
+*   `progress`: Check refactoring progress stats. (No flags)
+*   `function`: Get raw metadata for a function. (Flag: `--function <name>`)
 
 ## Operational Guidelines
+*   **Argument Naming:** Always use specific flags like `--function`, `--module`, or `--file`. Generic flags like `--name` are NOT supported.
 *   **Output:** The tool returns JSON. You should parse this and present a concise, readable summary (bullet points, tables).
 *   **Context:** Always mention the source file and line number when discussing a function.
 *   **Missing Data:** If a query returns empty, verify the spelling of the function/module name.
