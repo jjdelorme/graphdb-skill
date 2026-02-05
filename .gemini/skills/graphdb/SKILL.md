@@ -45,6 +45,21 @@ The graph uses Git commit hashes to detect "drift" between the code and the data
     *   `node .gemini/skills/graphdb/scripts/sync_graph.js --force`
 *   **Full Re-ingestion:** If the graph is significantly out of sync (> 5 files), the automatic sync will skip. Run the full Extraction and Import steps again.
 
+## Modernization Workflows
+
+### The "Search -> Map" Strategy (Microservice Extraction)
+Use this workflow to safely extract business logic from a monolith when you don't know where all the code lives.
+
+1.  **Discovery (Vector):** Find *all* relevant code, even if named obscurely.
+    *   *Command:* `node .gemini/skills/graphdb/scripts/find_implicit_links.js --query "concept description"`
+    *   *Goal:* Identify the "Conceptual Boundary" (e.g., finding `User_Save_Final` when looking for "Pricing").
+2.  **Analysis (Graph):** Determine the "Physical Boundary" of the functions found.
+    *   *Command:* `node .gemini/skills/graphdb/scripts/query_graph.js hybrid-context --function <function_name>`
+    *   *Goal:* See what these functions depend on (Globals, DB calls) and what calls *them*.
+3.  **Isolation (Seams):** Find the best point to cut.
+    *   *Command:* `node .gemini/skills/graphdb/scripts/query_graph.js seams --module <file_path>`
+    *   *Goal:* Identify functions with high Incoming/Low Outgoing dependencies to serve as the new API.
+
 ## Primary Use Cases
 
 ### 1. Identifying Seams (Decoupling Points)

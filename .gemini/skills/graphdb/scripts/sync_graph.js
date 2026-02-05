@@ -39,13 +39,24 @@ async function syncGraph(force = false) {
             return result;
         }
 
-        console.error(`Graph is behind. Indexed: ${lastCommit.substring(0, 7)}, HEAD: ${currentCommit.substring(0, 7)}`);
+        const lastCommitDisplay = lastCommit ? lastCommit.substring(0, 7) : 'Unknown';
+        console.error(`Graph is behind. Indexed: ${lastCommitDisplay}, HEAD: ${currentCommit.substring(0, 7)}`);
 
         // 2. Diff
         console.error("Calculating diff...");
         let diffOutput;
         try {
-            diffOutput = execSync(`git diff --name-only ${lastCommit} ${currentCommit}`, { cwd: ROOT_DIR }).toString();
+            if (!lastCommit) {
+                 console.warn("Previous commit unknown. Cannot calculate diff. Proceeding with surgical update on all files (or skipping if too risky).");
+                 // In this edge case, we can't really diff. 
+                 // If we assume everything changed, we might trigger a full rebuild.
+                 // For now, let's treat it as "changedFiles = []" which triggers a state update, 
+                 // effectively "claiming" the current state is the new baseline.
+                 // This effectively "Resets" the tracking.
+                 diffOutput = "";
+            } else {
+                 diffOutput = execSync(`git diff --name-only ${lastCommit} ${currentCommit}`, { cwd: ROOT_DIR }).toString();
+            }
         } catch (e) {
             console.error("Failed to diff. The last indexed commit might be unreachable.");
             return result;
