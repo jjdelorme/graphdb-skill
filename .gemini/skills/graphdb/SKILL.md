@@ -64,6 +64,17 @@ Prepare for refactoring by finding both explicit structural dependencies and imp
 *   **Command:** `node .gemini/skills/graphdb/scripts/query_graph.js hybrid-context --function <function_name>`
 *   **Output Analysis:** Returns `structural_dependencies` (hard links) and `semantic_related` (potential clones/logical groupings).
 
+### 7. Code Inspection
+Retrieve actual source code or pinpoint usage locations using graph metadata.
+
+**Fetch Definition:** Get the source code for a specific node.
+*   **Command:** `node .gemini/skills/graphdb/scripts/fetch_source.js --id <NodeID>`
+*   **Use Case:** Inspecting the code of a function found via Vector Search.
+
+**Locate Usage:** Find exactly where a dependency is used within a function.
+*   **Command:** `node .gemini/skills/graphdb/scripts/locate_usage.js --source <CallerID> --target <CalleeID>`
+*   **Use Case:** Identifying exact lines where a global variable is modified.
+
 ## Other Available Query Types
 *   `globals`: List global variable usage.
 *   `extract-service`: Suggest functions for service extraction.
