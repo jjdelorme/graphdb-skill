@@ -32,8 +32,10 @@ Loads the JSON files into a Neo4j database.
     ```
 *   **Command:** `node .gemini/skills/graphdb/scripts/import_to_neo4j.js`
 
-### 3. Vector Enrichment
+### 3. Vector Enrichment (⚠️ REQUIRES APPROVAL)
 Generates embeddings for functions to enable Semantic Search.
+> **CRITICAL:** This operation invokes paid APIs (Vertex AI) and is computationally expensive. **You MUST ask the user for explicit permission before running this command.**
+
 *   **Command:** `node .gemini/skills/graphdb/scripts/enrich_vectors.js`
 *   **Resumable:** Yes. The script automatically skips functions that already have embeddings. Re-run it at any time to process new or skipped items.
 *   **Performance:** Optimized for parallelism and batch I/O.
@@ -43,7 +45,8 @@ The graph uses Git commit hashes to detect "drift" between the code and the data
 *   **Automatic:** The `query_graph.js` tool automatically checks for drift. If < 5 files have changed, it performs a **Surgical Update** (re-parsing only changed files) before executing your query.
 *   **Manual Sync:** To force a synchronization (e.g., after a large branch switch):
     *   `node .gemini/skills/graphdb/scripts/sync_graph.js --force`
-*   **Full Re-ingestion:** If the graph is significantly out of sync (> 5 files), the automatic sync will skip. Run the full Extraction and Import steps again.
+*   **Full Re-ingestion (⚠️ DESTRUCTIVE):** If the graph is significantly out of sync (> 5 files), the automatic sync will skip.
+    *   **Action:** You MUST ask the user if they want to run the full Extraction and Import steps again. **Do not assume yes.**
 
 ## Modernization Workflows
 
