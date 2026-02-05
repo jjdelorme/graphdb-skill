@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const glob = require('glob');
+const { execSync } = require('child_process');
+const neo4jService = require('../scripts/Neo4jService');
 const GraphBuilder = require('./core/GraphBuilder');
 const CppAdapter = require('./adapters/CppAdapter');
 const CsharpAdapter = require('./adapters/CsharpAdapter');
@@ -82,9 +84,19 @@ async function main() {
     });
 
         // 4. Run
-
         await builder.run(fileList);
 
+        // 5. Update Graph State
+        try {
+            console.log("Updating Graph State...");
+            const commitHash = execSync('git rev-parse HEAD', { cwd: ROOT_DIR }).toString().trim();
+            await neo4jService.updateGraphState(commitHash);
+            console.log(`Graph state updated to commit: ${commitHash}`);
+        } catch (e) {
+            console.error("Failed to update graph state:", e);
+        } finally {
+            await neo4jService.close();
+        }
     }
 
     

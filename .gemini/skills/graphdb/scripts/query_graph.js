@@ -1,4 +1,5 @@
 const neo4jService = require('./Neo4jService');
+const { syncGraph } = require('./sync_graph');
 
 const queries = {
     'ui-contamination': async (session, params) => {
@@ -189,6 +190,9 @@ const queries = {
 };
 
 async function main() {
+    // 0. Auto-Sync Check
+    await syncGraph();
+
     const args = process.argv.slice(2);
     if (args.length === 0) {
         console.log('Usage: node query_graph.js <query-type> [--module <module>] [--function <func>] [--file <file>]');

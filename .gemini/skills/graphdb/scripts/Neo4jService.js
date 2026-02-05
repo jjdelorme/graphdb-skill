@@ -67,6 +67,23 @@ class Neo4jService {
             if (!session) await targetSession.close();
         }
     }
+
+    async getGraphState() {
+        const result = await this.run('MATCH (s:GraphState) RETURN s.last_indexed_commit as commit, s.updated_at as updated_at LIMIT 1');
+        if (result.records.length === 0) return null;
+        return {
+            commit: result.records[0].get('commit'),
+            updated_at: result.records[0].get('updated_at')
+        };
+    }
+
+    async updateGraphState(commitHash) {
+        await this.run(`
+            MERGE (s:GraphState)
+            SET s.last_indexed_commit = $commit,
+                s.updated_at = timestamp()
+        `, { commit: commitHash });
+    }
 }
 
 module.exports = new Neo4jService();

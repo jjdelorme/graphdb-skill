@@ -45,7 +45,7 @@ class GraphBuilder {
         this.edges.push({ source: sourceId, target: targetId, type });
     }
 
-    async run(fileList) {
+    async run(fileList, skipWrite = false) {
         console.log(`Starting Graph Build for ${fileList.length} files...`);
 
         // Initialize Adapters
@@ -161,7 +161,10 @@ class GraphBuilder {
             }
         }
 
-        this._writeOutput();
+        if (!skipWrite) {
+            this._writeOutput();
+        }
+        return { nodes: this.nodes, edges: this.edges };
     }
 
     _getAdapterForFile(filePath) {
