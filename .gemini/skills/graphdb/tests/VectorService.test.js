@@ -51,7 +51,7 @@ describe('VectorService', () => {
         
         // Verify default outputDimensionality is enforced
         const callArgs = mockEmbedContent.mock.calls[0].arguments[0];
-        assert.strictEqual(callArgs.outputDimensionality, 768, 'Should default to 768 dimensions');
+        assert.strictEqual(callArgs.config.outputDimensionality, 768, 'Should default to 768 dimensions');
     });
 
     test('Test 4: Configuration - respects custom dimensions', async () => {
@@ -64,7 +64,7 @@ describe('VectorService', () => {
             
             await service.embedDocuments(["test"]);
             const callArgs = mockEmbedContent.mock.calls[0].arguments[0];
-            assert.strictEqual(callArgs.outputDimensionality, 128, 'Should use configured dimensions');
+            assert.strictEqual(callArgs.config.outputDimensionality, 128, 'Should use configured dimensions');
         } finally {
             if (originalDim) process.env.GEMINI_EMBEDDING_DIMENSIONS = originalDim;
             else delete process.env.GEMINI_EMBEDDING_DIMENSIONS;

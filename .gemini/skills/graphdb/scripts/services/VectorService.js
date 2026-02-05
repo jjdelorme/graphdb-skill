@@ -43,7 +43,9 @@ class VectorService {
                     const result = await this.client.models.embedContent({
                         model: this.modelName,
                         contents: [{ parts: [{ text: text }] }],
-                        outputDimensionality: this.dimensions
+                        config: {
+                            outputDimensionality: this.dimensions
+                        }
                     });
                     
                     if (result && result.embedding && result.embedding.values) {
