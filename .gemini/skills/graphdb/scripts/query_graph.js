@@ -156,10 +156,14 @@ const queries = {
             OPTIONAL MATCH (f)-[:DEFINED_IN]->(file:File)
             RETURN f as function, file.file as file
         `, { func });
-        return result.records.map(r => ({
-            ...r.get('function').properties,
-            file: r.get('file')
-        }));
+        return result.records.map(r => {
+            const props = r.get('function').properties;
+            const { embedding, ...cleanProps } = props;
+            return {
+                ...cleanProps,
+                file: r.get('file')
+            };
+        });
     },
     'analyze-state': async (session, params) => {
         const func = params.function;
