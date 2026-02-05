@@ -32,6 +32,13 @@ Loads the JSON files into a Neo4j database.
     ```
 *   **Command:** `node .gemini/skills/graphdb/scripts/import_to_neo4j.js`
 
+### 3. Synchronization (Automatic & Manual)
+The graph uses Git commit hashes to detect "drift" between the code and the database.
+*   **Automatic:** The `query_graph.js` tool automatically checks for drift. If < 5 files have changed, it performs a **Surgical Update** (re-parsing only changed files) before executing your query.
+*   **Manual Sync:** To force a synchronization (e.g., after a large branch switch):
+    *   `node .gemini/skills/graphdb/scripts/sync_graph.js --force`
+*   **Full Re-ingestion:** If the graph is significantly out of sync (> 5 files), the automatic sync will skip. Run the full Extraction and Import steps again.
+
 ## Primary Use Cases
 
 ### 1. Identifying Seams (Decoupling Points)
