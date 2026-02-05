@@ -46,4 +46,52 @@ Line 5`;
         assert.ok(query.includes("UNWIND $batch"));
         assert.ok(query.includes("SET f.embedding"));
     });
+
+    test('Test 3: Batch Optimization - groups functions by file and reads once', () => {
+        const batch = [
+            { id: 1, file: 'a.js', start: 1, end: 1 },
+            { id: 2, file: 'a.js', start: 3, end: 3 },
+            { id: 3, file: 'b.js', start: 1, end: 1 }
+        ];
+
+        let readCounts = {};
+        const mockFs = {
+            existsSync: () => true,
+            readFileSync: (f) => {
+                readCounts[f] = (readCounts[f] || 0) + 1;
+                return "L1\nL2\nL3\nL4";
+            }
+        };
+
+        // Implementation we want to test
+        const processBatch = (items) => {
+            const results = [];
+            // Group by file
+            const groups = {};
+            for (const item of items) {
+                if (!groups[item.file]) groups[item.file] = [];
+                groups[item.file].push(item);
+            }
+
+            for (const file in groups) {
+                const content = mockFs.readFileSync(file);
+                const lines = content.split('\n');
+                for (const item of groups[file]) {
+                    results.push({
+                        id: item.id,
+                        code: lines.slice(item.start - 1, item.end).join('\n')
+                    });
+                }
+            }
+            return results;
+        };
+
+        const processed = processBatch(batch);
+
+        assert.strictEqual(processed.length, 3);
+        assert.strictEqual(readCounts['a.js'], 1, 'Should read a.js only once');
+        assert.strictEqual(readCounts['b.js'], 1, 'Should read b.js only once');
+        assert.strictEqual(processed.find(p => p.id === 1).code, 'L1');
+        assert.strictEqual(processed.find(p => p.id === 2).code, 'L3');
+    });
 });

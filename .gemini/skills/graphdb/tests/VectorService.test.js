@@ -96,4 +96,31 @@ describe('VectorService', () => {
         assert.strictEqual(callCount, 3);
         assert.deepStrictEqual(result[0], [0.9, 0.9, 0.9]);
     });
+
+    test('Test 5: Batch Processing - preserves order with multiple items', async () => {
+        const inputs = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"];
+        
+        // Mock that returns embeddings based on input content to verify mapping
+        mockEmbedContent = mock.fn(async (args) => {
+            const text = args.contents[0].parts[0].text;
+            const idx = parseInt(text.split(' ')[1]) - 1;
+            return {
+                embeddings: [{
+                    values: [idx, idx, idx]
+                }]
+            };
+        });
+        
+        mockClient = { models: { embedContent: mockEmbedContent } };
+        const service = new VectorService({ client: mockClient });
+        
+        const results = await service.embedDocuments(inputs);
+        
+        assert.strictEqual(results.length, 5);
+        assert.deepStrictEqual(results[0], [0, 0, 0]);
+        assert.deepStrictEqual(results[4], [4, 4, 4]);
+        
+        // Verify call count (should be 5 for now)
+        assert.strictEqual(mockEmbedContent.mock.callCount(), 5);
+    });
 });

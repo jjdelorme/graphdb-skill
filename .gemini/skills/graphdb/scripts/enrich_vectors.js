@@ -6,7 +6,7 @@ const VectorService = require('./services/VectorService');
 // Neo4j Vector Config
 const VECTOR_DIMENSIONS = parseInt(process.env.GEMINI_EMBEDDING_DIMENSIONS || "768", 10);
 const INDEX_NAME = 'function_embeddings';
-const BATCH_SIZE = 50; // Processing batch size
+const BATCH_SIZE = 200; // Processing batch size
 
 async function run() {
     const session = neo4jService.getSession();
@@ -67,36 +67,65 @@ async function run() {
 
             console.log(`Processing batch ${++batchCount} (${batch.length} items)...`);
             
+            // Group by file to optimize I/O
+            const fileGroups = {};
+            for (const item of batch) {
+                if (!fileGroups[item.file]) fileGroups[item.file] = [];
+                fileGroups[item.file].push(item);
+            }
+
             // Extract Source Code
             const textsToEmbed = [];
             const validItems = [];
+            const errorUpdates = []; // { id, error }
 
-            for (const item of batch) {
+            for (const relPath in fileGroups) {
+                const groupItems = fileGroups[relPath];
+                const absPath = path.resolve(__dirname, '../../../../', relPath);
+
                 try {
-                    // Resolve file path relative to Project Root (4 levels up from script)
-                    const absPath = path.resolve(__dirname, '../../../../', item.file);
-                    
                     if (fs.existsSync(absPath)) {
                         const content = fs.readFileSync(absPath, 'utf8');
                         const lines = content.split('\n');
-                        // Tree-sitter lines are 1-based usually, check ExtractGraph logic.
-                        // Pass 1: line: node.startPosition.row + 1. So yes, 1-based.
-                        // Array slice is 0-based.
-                        // Lines 1-based: Start=1 means Index=0.
-                        const sourceCode = lines.slice(item.start - 1, item.end).join('\n');
                         
-                        // Optimize: Add Function Name to context
-                        const text = `Function Name: ${item.name}\nSource Code:\n${sourceCode}`;
-                        textsToEmbed.push(text);
-                        validItems.push(item);
+                        for (const item of groupItems) {
+                            try {
+                                // Tree-sitter lines are 1-based usually, check ExtractGraph logic.
+                                // Pass 1: line: node.startPosition.row + 1. So yes, 1-based.
+                                // Array slice is 0-based.
+                                // Lines 1-based: Start=1 means Index=0.
+                                const sourceCode = lines.slice(item.start - 1, item.end).join('\n');
+                                
+                                // Optimize: Add Function Name to context
+                                const text = `Function Name: ${item.name}\nSource Code:\n${sourceCode}`;
+                                textsToEmbed.push(text);
+                                validItems.push(item);
+                            } catch (e) {
+                                console.error(`Error extracting source for ${item.name}: ${e.message}`);
+                                errorUpdates.push({ id: item.id, error: e.message });
+                            }
+                        }
                     } else {
                         console.warn(`File not found: ${absPath}`);
-                        await session.run("MATCH (f:Function {id: $id}) SET f.embedding_error = 'File Not Found'", { id: item.id });
+                        for (const item of groupItems) {
+                            errorUpdates.push({ id: item.id, error: 'File Not Found' });
+                        }
                     }
                 } catch (e) {
-                    console.error(`Error reading source for ${item.name}: ${e.message}`);
-                     await session.run("MATCH (f:Function {id: $id}) SET f.embedding_error = $err", { id: item.id, err: e.message });
+                    console.error(`Error reading file ${relPath}: ${e.message}`);
+                    for (const item of groupItems) {
+                        errorUpdates.push({ id: item.id, error: `File Read Error: ${e.message}` });
+                    }
                 }
+            }
+
+            // Commit I/O errors immediately
+            if (errorUpdates.length > 0) {
+                await session.run(`
+                    UNWIND $updates as row
+                    MATCH (f:Function {id: row.id})
+                    SET f.embedding_error = row.error
+                `, { updates: errorUpdates });
             }
 
             if (textsToEmbed.length > 0) {
@@ -105,7 +134,8 @@ async function run() {
 
                 // Write Back
                 const updateBatch = [];
-                const errorBatch = [];
+                const embeddingErrors = [];
+                
                 for (let i = 0; i < validItems.length; i++) {
                     const vector = vectors[i];
                     if (vector) {
@@ -114,7 +144,7 @@ async function run() {
                             embedding: vector
                         });
                     } else {
-                        errorBatch.push(validItems[i].id);
+                        embeddingErrors.push(validItems[i].id);
                     }
                 }
 
@@ -129,13 +159,13 @@ async function run() {
                     console.log(`Updated ${updateBatch.length} functions.`);
                 }
 
-                if (errorBatch.length > 0) {
+                if (embeddingErrors.length > 0) {
                     await session.run(`
                         UNWIND $ids as id
                         MATCH (f:Function {id: id})
                         SET f.embedding_error = 'Embedding failed after retries'
-                    `, { ids: errorBatch });
-                    console.warn(`Flagged ${errorBatch.length} functions with errors.`);
+                    `, { ids: embeddingErrors });
+                    console.warn(`Flagged ${embeddingErrors.length} functions with embedding errors.`);
                 }
             }
         }

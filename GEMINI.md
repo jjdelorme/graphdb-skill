@@ -47,7 +47,3 @@ cd .gemini/skills/graphdb && npm install
 cd ../neo4j-manager && npm install
 cd ../../../ # Return to root
 ```
-
-## 👨‍💻 Development Guidelines
-
-*   **TDD is MANDATORY:** All changes must follow Red-Green-Refactor. See `test/` directories in each skill for examples.

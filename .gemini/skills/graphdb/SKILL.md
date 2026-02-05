@@ -32,7 +32,13 @@ Loads the JSON files into a Neo4j database.
     ```
 *   **Command:** `node .gemini/skills/graphdb/scripts/import_to_neo4j.js`
 
-### 3. Synchronization (Automatic & Manual)
+### 3. Vector Enrichment
+Generates embeddings for functions to enable Semantic Search.
+*   **Command:** `node .gemini/skills/graphdb/scripts/enrich_vectors.js`
+*   **Resumable:** Yes. The script automatically skips functions that already have embeddings. Re-run it at any time to process new or skipped items.
+*   **Performance:** Optimized for parallelism and batch I/O.
+
+### 4. Synchronization (Automatic & Manual)
 The graph uses Git commit hashes to detect "drift" between the code and the database.
 *   **Automatic:** The `query_graph.js` tool automatically checks for drift. If < 5 files have changed, it performs a **Surgical Update** (re-parsing only changed files) before executing your query.
 *   **Manual Sync:** To force a synchronization (e.g., after a large branch switch):
