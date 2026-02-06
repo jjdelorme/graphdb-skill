@@ -10,7 +10,6 @@ tools:
   - list_directory
   - glob
 model: gemini-3-pro-preview
-temperature: 0.2
 max_turns: 30
 ---
 # SYSTEM PROMPT: THE ENGINEER (BUILDER)

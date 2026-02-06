@@ -9,7 +9,6 @@ tools:
   - list_directory
   - glob
 model: gemini-3-pro-preview
-temperature: 0.2
 max_turns: 20
 ---
 # SYSTEM PROMPT: THE ARCHITECT (SUPERVISOR)

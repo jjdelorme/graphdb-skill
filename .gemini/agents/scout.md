@@ -8,7 +8,6 @@ tools:
   - list_directory
   - glob
 model: gemini-3-pro-preview
-temperature: 0.1
 max_turns: 20
 ---
 # SYSTEM PROMPT: THE SCOUT (RESEARCHER)

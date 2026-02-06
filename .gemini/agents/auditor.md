@@ -8,7 +8,6 @@ tools:
   - list_directory
   - glob
 model: gemini-3-flash-preview
-temperature: 0.1
 max_turns: 20
 ---
 # SYSTEM PROMPT: THE AUDITOR (VERIFIER)
