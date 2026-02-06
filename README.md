@@ -1,3 +1,15 @@
+# GraphDB Skill Ecosystem
+
+## 🤖 Specialized Agents
+
+This project uses a multi-agent orchestration pattern to handle complex modernization tasks. Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
+
+*   **Architect**: The supervisor. Manages the roadmap (`@plans/`), prioritizes technical debt, and dispatches tasks to other agents.
+*   **Scout**: The researcher. Uses the GraphDB to map dependencies, identify global state usage, and find architectural "seams" for refactoring.
+*   **Engineer**: The builder. Implements changes using strict Test-Driven Development (TDD) and patterns like "Strangler Fig" and "Gather-Calculate-Scatter".
+*   **Auditor**: The gatekeeper. Verifies that the Engineer's work meets quality standards, passes tests, and doesn't introduce new technical debt.
+*   **MSBuild**: The specialist. Handles the heavy lifting of running builds and tests, providing concise error reporting back to the loop.
+
 ## 🛠️ Build & Ingestion Workflow
 
 To analyze a codebase, you must first ingest it into the Graph Database. Run these commands from the **project root**:
