@@ -7,7 +7,6 @@ tools:
   - read_file
   - list_directory
   - glob
-  - msbuild
 model: gemini-3-flash-preview
 temperature: 0.1
 max_turns: 20

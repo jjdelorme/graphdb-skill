@@ -9,7 +9,6 @@ tools:
   - replace
   - list_directory
   - glob
-  - msbuild
 model: gemini-3-pro-preview
 temperature: 0.2
 max_turns: 30

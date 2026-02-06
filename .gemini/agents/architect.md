@@ -8,10 +8,6 @@ tools:
   - write_file
   - list_directory
   - glob
-  - scout
-  - engineer
-  - auditor
-  - msbuild
 model: gemini-3-pro-preview
 temperature: 0.2
 max_turns: 20
