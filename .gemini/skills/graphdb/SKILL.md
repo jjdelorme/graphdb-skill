@@ -70,7 +70,18 @@ Find the best functions to extract to break dependencies.
 *   **Command:** `node .gemini/skills/graphdb/scripts/query_graph.js seams --module <module_name>`
 *   **Output Analysis:** Look for functions with high "Incoming" count but low "Outgoing" count.
 
-### 2. Analyzing Dependencies (Test Context)
+### 2. Seam Discovery via Semantic Clustering
+Identify cohesive clusters of functions within a "God Class" or monolithic module to propose refactoring seams.
+*   **Command:** `node .gemini/skills/graphdb/scripts/query_graph.js suggest-seams --module <module_name> [--k <num_clusters>]`
+*   **When to use:**
+    *   You have a large class (e.g., `UserManager.cs`) with 50+ methods and mixed responsibilities (Auth, Database, formatting).
+    *   You want to break it into smaller services but don't know where to draw the lines.
+*   **Example Scenario:**
+    *   *Input:* `suggest-seams --module "UserManager"`
+    *   *Output:* "Found 3 Clusters: Cluster 1 (Auth logic), Cluster 2 (DB CRUD), Cluster 3 (UI Formatting)."
+    *   *Value:* Automates the high-cognitive task of grouping related methods, speeding up the design phase of refactoring.
+
+### 3. Analyzing Dependencies (Test Context)
 Determine what a function depends on (globals, other functions) to set up a test harness.
 *   **Command:** `node .gemini/skills/graphdb/scripts/query_graph.js test-context --function <function_name>`
 *   **Output Analysis:** Detailed list of global variables read/written and function calls.
@@ -108,6 +119,7 @@ Retrieve actual source code or pinpoint usage locations using graph metadata.
 
 ## Other Available Query Types
 *   `globals`: List global variable usage. (Flag: `--module <name>`)
+*   `suggest-seams`: Propose functional clusters for splitting large files. (Flag: `--module <name>`)
 *   `extract-service`: Suggest functions for service extraction. (Flag: `--module <name>`)
 *   `impact`: Analyze impact of changes (reverse dependencies). (Flag: `--function <name>`)
 *   `co-change`: Find files that frequently change together. (Flag: `--file <path>`)

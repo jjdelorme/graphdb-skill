@@ -1,7 +1,65 @@
 const neo4jService = require('./Neo4jService');
 const { syncGraph } = require('./sync_graph');
+const ClusterService = require('./services/ClusterService');
 
 const queries = {
+    'suggest-seams': async (session, params) => {
+        const module = params.module || '.*';
+        const targetK = params.k ? parseInt(params.k, 10) : undefined;
+
+        // 1. Fetch functions and their embeddings
+        const result = await session.run(`
+            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
+            WHERE file.file =~ $pattern AND f.embedding IS NOT NULL
+            RETURN f.label as name, f.embedding as embedding, file.file as file
+        `, { pattern: `.*${module}.*` });
+
+        if (result.records.length === 0) {
+            return { error: 'No functions with embeddings found for pattern: ' + module };
+        }
+
+        const data = result.records.map(r => ({
+            name: r.get('name'),
+            embedding: r.get('embedding'),
+            file: r.get('file')
+        }));
+
+        // 2. Perform Clustering
+        const vectors = data.map(d => d.embedding);
+        const clusterResult = ClusterService.cluster(vectors, targetK);
+
+        // 3. Group results
+        const clusters = {};
+        for (let i = 0; i < data.length; i++) {
+            const clusterId = clusterResult.clusters[i];
+            if (!clusters[clusterId]) clusters[clusterId] = [];
+            clusters[clusterId].push({
+                name: data[i].name,
+                file: data[i].file
+            });
+        }
+
+        return {
+            pattern: module,
+            k: clusterResult.k,
+            silhouette_score: clusterResult.score,
+            clusters: Object.entries(clusters).map(([id, members]) => ({
+                id: parseInt(id, 10),
+                member_count: members.length,
+                members: members.slice(0, 10), // Limit members in output for readability
+                representative_members: members.slice(0, 3).map(m => m.name)
+            }))
+        };
+    },
+    'debug-files': async (session, params) => {
+        const result = await session.run(`
+            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
+            RETURN file.file as file, count(f) as total, sum(CASE WHEN f.embedding IS NOT NULL THEN 1 ELSE 0 END) as embedded
+            ORDER BY embedded DESC
+            LIMIT 20
+        `);
+        return result.records.map(r => r.toObject());
+    },
     'ui-contamination': async (session, params) => {
         const module = params.module || '.*';
         const result = await session.run(`
