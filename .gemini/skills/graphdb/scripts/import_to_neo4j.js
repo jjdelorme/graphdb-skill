@@ -1,6 +1,7 @@
 const neo4jService = require('./Neo4jService');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // Configuration - look for nodes/edges relative to project root or in standard location
 const ROOT_DIR = path.resolve(__dirname, '../../../../');
@@ -128,7 +129,17 @@ async function run() {
         console.warn(`Edges file not found: ${EDGES_FILE}`);
     }
 
-    // 5. Verification
+    // 5. Update Graph State
+    try {
+        console.log("Updating Graph State...");
+        const commitHash = execSync('git rev-parse HEAD', { cwd: ROOT_DIR }).toString().trim();
+        await neo4jService.updateGraphState(commitHash);
+        console.log(`Graph state updated to commit: ${commitHash}`);
+    } catch (e) {
+        console.error("Failed to update graph state:", e);
+    }
+
+    // 6. Verification
     const countResult = await runWithRetry(session, 'MATCH (n) RETURN count(n) as c');
     const edgeResult = await runWithRetry(session, 'MATCH ()-[r]->() RETURN count(r) as c');
     console.log('Final Verification:');
