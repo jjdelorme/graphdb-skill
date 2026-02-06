@@ -184,6 +184,9 @@ class GraphBuilder {
         if (ext === '.aspx' || ext === '.cshtml' || ext === '.asp') {
             return this.config.adapters.asp;
         }
+        if (ext === '.ts' || ext === '.tsx') {
+            return this.config.adapters.ts;
+        }
         return null;
     }
 

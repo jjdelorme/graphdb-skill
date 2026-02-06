@@ -9,6 +9,7 @@ const CsharpAdapter = require('./adapters/CsharpAdapter');
 const VbAdapter = require('./adapters/VbAdapter');
 const SqlAdapter = require('./adapters/SqlAdapter');
 const AspAdapter = require('./adapters/AspAdapter');
+const TsAdapter = require('./adapters/TsAdapter');
 
 // Paths
 const ROOT_DIR = path.resolve(__dirname, '../../../../');
@@ -45,7 +46,8 @@ async function main() {
     // VB.NET: .vb
     // Web: .asp, .aspx, .cshtml, .razor
     // Database: .sql
-    const extensions = 'c,cc,cpp,cxx,h,hh,hpp,hxx,inl,cs,vb,asp,aspx,cshtml,razor,sql';
+    // TypeScript: .ts, .tsx
+    const extensions = 'c,cc,cpp,cxx,h,hh,hpp,hxx,inl,cs,vb,asp,aspx,cshtml,razor,sql,ts,tsx';
     
     const files = glob.sync(`**/*.{${extensions}}`, { 
         cwd: ROOT_DIR, 
@@ -68,6 +70,7 @@ async function main() {
     const csAdapter = new CsharpAdapter(CS_WASM_PATH);
     const vbAdapter = new VbAdapter(); // Native
     const sqlAdapter = new SqlAdapter(); // Regex
+    const tsAdapter = new TsAdapter(); // Native (Tree-sitter bindings)
     const aspAdapter = new AspAdapter({ csharp: csAdapter, vb: vbAdapter });
 
     // 3. Configure Builder
@@ -79,7 +82,8 @@ async function main() {
             csharp: csAdapter,
             vb: vbAdapter,
             sql: sqlAdapter,
-            asp: aspAdapter
+            asp: aspAdapter,
+            ts: tsAdapter
         }
     });
 
