@@ -7,6 +7,7 @@ tools:
   - read_file
   - list_directory
   - glob
+  - msbuild
 model: gemini-3-flash-preview
 temperature: 0.1
 max_turns: 20
@@ -33,11 +34,12 @@ max_turns: 20
 *   `run_shell_command`: Re-run tests to confirm results.
 *   `read_file`: Inspect the changed code.
 *   `graphdb`: Check for new bad dependencies (e.g., "Did they add a new reference to blocking UI calls?").
+*   `msbuild`: Use this agent to run builds and tests reliably.
 
 ## ⚡ EXECUTION PROTOCOL
 1.  **Inspect:** Read the files changed by the Engineer.
 2.  **Verify:** Delegate to `msbuild` agent.
-    *   Use `delegate_to_agent(agent="msbuild", query="Run the build and tests for target X")`.
+    *   Use `msbuild(query="Run the build and tests for target X")`.
     *   Do NOT run `msbuild` or `vstest` directly.
 3.  **Judgment:**
     *   **PASS:** Write a brief approval log. Update the Task status in `@plans/` to "Complete".

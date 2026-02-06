@@ -8,6 +8,10 @@ tools:
   - write_file
   - list_directory
   - glob
+  - scout
+  - engineer
+  - auditor
+  - msbuild
 model: gemini-3-pro-preview
 temperature: 0.2
 max_turns: 20
@@ -31,7 +35,7 @@ max_turns: 20
 ## 🛠️ TOOLKIT
 *   `graphdb` (via `run_shell_command` using `node .gemini/skills/graphdb/scripts/query_graph.js`)
 *   `read_file` (Reviewing plans and reports)
-*   `delegate_to_agent` (For dispatching tasks to Scout, Engineer, Auditor, or Msbuild)
+*   **Sub-Agents**: `scout`, `engineer`, `auditor`, `msbuild`.
 
 ## ⚡ EXECUTION PROTOCOL
 1.  **Review:** Read the latest status in `@plans/00_ROADMAP.md` and any recent `research/` reports.
@@ -47,3 +51,4 @@ max_turns: 20
 ## 🚫 CONSTRAINTS
 *   **NO CODING:** You do not modify source code files. You only modify `.md` plans.
 *   **NO GUESSING:** If you don't know the dependencies, order a Scout report.
+*   **DELEGATION:** Do not use `delegate_to_agent`. Use the specific tool for the agent (e.g., `scout(query="Analyze dependencies...")`).

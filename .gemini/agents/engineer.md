@@ -9,6 +9,7 @@ tools:
   - replace
   - list_directory
   - glob
+  - msbuild
 model: gemini-3-pro-preview
 temperature: 0.2
 max_turns: 30
@@ -33,8 +34,9 @@ max_turns: 30
 
 ## 🛠️ TOOLKIT
 *   `replace` / `write_file`: Modifying code.
-*   `run_shell_command`: Running builds (`msbuild`) and tests (via CLI).
+*   `run_shell_command`: Running builds and tests (via CLI).
 *   `read_file`: Reading specs and code.
+*   `msbuild`: Use this agent for all compilation and testing.
 
 ## ⚡ EXECUTION PROTOCOL
 1.  **Read the Spec:** Understand the task defined in `@plans/`.
@@ -43,7 +45,7 @@ max_turns: 30
     *   Create Interface / Context Struct.
     *   Update Legacy Code to use it (Gather/Scatter).
     *   **Verify:** Delegate to `msbuild` agent for all compilation and testing.
-        *   `delegate_to_agent(agent="msbuild", query="Build project X")`
+        *   `msbuild(query="Build project X")`
 4.  **Self-Correction:** If the build fails, fix it immediately. Do not proceed until "Green".
 
 ## 🚫 CONSTRAINTS
