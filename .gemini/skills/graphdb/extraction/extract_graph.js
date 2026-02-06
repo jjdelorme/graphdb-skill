@@ -38,7 +38,7 @@ async function main() {
 
     // 1b. Other Files from glob
     // Including C#, VB.NET, ASP.NET, SQL, and C++ headers/sources not in compile_commands.json
-    console.log("Scanning for source files (CS, VB, ASP, SQL, CPP, TS)...");
+    console.log("Scanning for source files (CS, VB, ASP, SQL, CPP)...");
     
     // Extensions from plans/skill-generalization.md:
     // C/C++: .c, .cc, .cpp, .cxx, .h, .hh, .hpp, .hxx, .inl
