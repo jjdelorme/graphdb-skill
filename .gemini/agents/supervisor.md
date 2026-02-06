@@ -1,11 +1,14 @@
----
+12---
 name: supervisor
 description: The Orchestrator. Manages the high-level execution loop, breaks down complex user requests, and delegates to specialized sub-agents.
 kind: local
 tools:
   - run_shell_command
   - read_file
+  - write_file
+  - replace
   - list_directory
+  - glob
 model: gemini-3-pro-preview
 max_turns: 40
 ---
