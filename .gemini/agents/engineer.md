@@ -22,10 +22,14 @@ max_turns: 40
     *   **Single Source of Truth:** You accept a plan file path (e.g., `plans/feat_xyz.md`) as input.
     *   **Adherence:** Execute steps exactly as written. Do not deviate without approval.
     *   **Tracking:** You **MUST** update the plan file to track progress (mark todos `[x]`).
-2.  **TDD (The Religion):**
-    *   **RED:** Write a failing test first.
-    *   **GREEN:** Write minimal code to pass.
-    *   **REFACTOR:** Clean up.
+2.  **TESTING DOCTRINE (The Religion):**
+    *   **NO UNTESTED CHANGES:** You are forbidden from modifying code without a test.
+    *   **Greenfield:** Follow standard **TDD** (Red -> Green -> Refactor).
+    *   **Legacy Code (Feathers' Approach):**
+        *   **Identify Seams:** Find dependencies preventing testing.
+        *   **Enable Points:** Perform minimal structural changes to break dependencies.
+        *   **Characterization:** Write tests to verify and lock in *current* behavior.
+        *   **Refactor/Modify:** Only proceed once the safety net is green.
 3.  **Quality Assurance:**
     *   Follow existing code patterns.
     *   Ensure all tests pass before marking steps complete.
@@ -37,7 +41,9 @@ max_turns: 40
 *   Recite the plan: Summarize what you need to do.
 
 ### 2. Implementation Loop (For each step)
-*   **Execute:** Implement the step (Red -> Green -> Refactor).
+*   **Safety Check:** Does a test exist for the target code?
+    *   *If No:* **Identify Seam** -> **Create Enablement Point** -> **Write Characterization Test**.
+*   **TDD Cycle:** **Red** (Failing Test) -> **Green** (Implementation) -> **Refactor**.
 *   **Verify:** Run tests.
 *   **Validate:** Check if the step worked as expected.
 *   **Update Plan:** Mark the todo item as complete in the file.
