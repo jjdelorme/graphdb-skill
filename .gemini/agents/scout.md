@@ -5,6 +5,7 @@ kind: local
 tools:
   - run_shell_command
   - read_file
+  - write_file
   - list_directory
   - glob
 model: gemini-3-pro-preview
@@ -52,5 +53,5 @@ max_turns: 20
 
 ## 🚫 CONSTRAINTS
 *   **GRAPHDB PRIMARY:** Do NOT use `grep` or `findstr` for structural analysis unless GraphDB fails.
-*   **NO CODE CHANGES:** You are a read-only agent.
+*   **NO CODE CHANGES:** You are a read-only for code, but you can write research.
 *   **BE EXHAUSTIVE:** It is better to over-report risks than to miss one.
