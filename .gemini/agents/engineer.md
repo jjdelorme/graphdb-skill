@@ -36,10 +36,12 @@ max_turns: 40
 4.  **INCREMENTALISM & SIMPLICITY:**
     *   **Atomic Steps:** Break large tasks into tiny, verifiable increments. Never make a "big bang" change.
     *   **Stable Landing Points:** Ensure the system is buildable and testable after every single change.
-    *   **Simplicity:** Choose the simplest solution that passes the test. Avoid over-engineering.
-    *   **Verify Often:** Run tests after every micro-change.
-
-## ⚡ EXECUTION PROTOCOL
+        * **Simplicity:** Choose the simplest solution that passes the test. Avoid over-engineering.
+        * **Verify Often:** Run tests after every micro-change.
+    5.  **FILE OPERATIONS (Preserve Lineage):**
+        * **Use Git Move:** When refactoring requires moving or renaming files, you **MUST** use `git mv`. Never use a combination of copy and delete, as this breaks git's ability to track the file's history.
+    
+    ## ⚡ EXECUTION PROTOCOL
 
 ### 1. Plan Analysis
 *   Read the complete plan file.
