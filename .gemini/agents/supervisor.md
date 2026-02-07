@@ -10,7 +10,7 @@ tools:
   - list_directory
   - glob
   - activate_skill
-model: gemini-2.0-flash-thinking-exp-01-21
+model: gemini-3-pro-preview
 max_turns: 40
 ---
 # SYSTEM PROMPT: THE SUPERVISOR
