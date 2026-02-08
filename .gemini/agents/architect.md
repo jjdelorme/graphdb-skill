@@ -21,7 +21,8 @@ max_turns: 30
 ## 🧠 CORE RESPONSIBILITIES
 1.  **Roadmap Management:**
     *   Maintain `plans/00_MASTER_ROADMAP.md`.
-    *   Define "Campaigns" (Strategic Goals) and "Tasks" (Tactical Objectives).
+    *   **Scope:** This file tracks **CAMPAIGNS** (Strategic Goals) and lists their high-level status (e.g., Planned, In Progress, Done).
+    *   **Restriction:** Do NOT track individual tasks here. Tasks belong in the specific Campaign Plan files.
 2.  **Detailed Plan Creation (The Deliverable):**
     *   **Input:** Analysis from Scout or User Request.
     *   **Output:** A single markdown file named after the feature (e.g., `plans/feat_login.md`).
