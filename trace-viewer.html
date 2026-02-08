@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Agent Trace Viewer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Highlight.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .scroll-custom::-webkit-scrollbar { width: 8px; }
+        .scroll-custom::-webkit-scrollbar-track { background: #1e293b; }
+        .scroll-custom::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .scroll-custom::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        pre { margin: 0; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+    </style>
+</head>
+<body>
+    <div id="app" class="h-screen flex flex-col overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between shadow-md z-10">
+            <div class="flex items-center gap-4">
+                <h1 class="text-xl font-bold text-sky-400 flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                    Agent Trace Viewer
+                </h1>
+                
+                <!-- File Input -->
+                <div class="relative">
+                    <input type="file" @change="handleFileUpload" accept=".jsonl,.json,.txt" class="hidden" id="file-upload">
+                    <label for="file-upload" class="cursor-pointer bg-slate-700 hover:bg-slate-600 text-sm py-2 px-4 rounded border border-slate-600 transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Load Log File
+                    </label>
+                </div>
+
+                <span v-if="logs.length" class="text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded">
+                    {{ logs.length }} events loaded
+                </span>
+            </div>
+
+            <!-- Global Filters -->
+            <div class="flex items-center gap-3" v-if="logs.length">
+                <label class="text-sm text-slate-400">Session:</label>
+                <select v-model="selectedSession" class="bg-slate-900 border border-slate-600 text-sm rounded px-2 py-1 focus:ring-2 focus:ring-sky-500 outline-none max-w-[200px]">
+                    <option value="all">All Sessions</option>
+                    <option v-for="s in sessions" :key="s" :value="s">{{ formatSession(s) }}</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex overflow-hidden">
+            
+            <!-- Sidebar: Files & Stats -->
+            <aside class="w-64 bg-slate-900 border-r border-slate-700 flex flex-col" v-if="logs.length">
+                <div class="p-3 border-b border-slate-800 bg-slate-800/50 font-semibold text-xs text-slate-400 uppercase tracking-wider">
+                    Files Touched
+                </div>
+                <div class="flex-1 overflow-y-auto scroll-custom p-2 space-y-1">
+                    <button 
+                        @click="selectedFile = null"
+                        :class="['w-full text-left px-3 py-2 rounded text-sm transition-colors flex justify-between items-center', !selectedFile ? 'bg-sky-900/30 text-sky-300 border border-sky-800' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200']"
+                    >
+                        <span>All Files</span>
+                    </button>
+                    <button 
+                        v-for="(count, file) in fileStats" 
+                        :key="file"
+                        @click="selectedFile = file"
+                        :class="['w-full text-left px-3 py-2 rounded text-sm transition-colors flex justify-between items-center group', selectedFile === file ? 'bg-sky-900/30 text-sky-300 border border-sky-800' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200']"
+                    >
+                        <span class="truncate pr-2" :title="file">{{ getFileName(file) }}</span>
+                        <span class="text-xs bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 group-hover:text-slate-300">{{ count }}</span>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Timeline -->
+            <main class="flex-1 overflow-y-auto scroll-custom bg-slate-900/50 p-6 relative">
+                
+                <!-- Empty State -->
+                <div v-if="!logs.length" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
+                    <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <p class="text-lg">Drop your <code class="bg-slate-800 px-1 py-0.5 rounded text-sky-400">execution-trace.jsonl</code> here</p>
+                    <p class="text-sm mt-2 opacity-60">or click "Load Log File" above</p>
+                </div>
+
+                <!-- Log Stream -->
+                <div v-else class="max-w-4xl mx-auto space-y-4">
+                    
+                    <div v-for="(entry, index) in filteredLogs" :key="index" class="relative pl-8 pb-4 border-l-2 border-slate-700 last:border-0 last:pb-0">
+                        <!-- Timeline Dot -->
+                        <div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-slate-900" :class="getStatusColor(entry)"></div>
+                        
+                        <!-- Card -->
+                        <div class="bg-slate-800 rounded-lg border border-slate-700 shadow-sm overflow-hidden transition-all hover:border-slate-600">
+                            
+                            <!-- Card Header -->
+                            <div @click="entry.expanded = !entry.expanded" class="p-3 cursor-pointer flex items-start gap-3 hover:bg-slate-700/30 transition-colors">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs font-mono text-slate-500">{{ formatTime(entry.timestamp) }}</span>
+                                        <span class="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide" :class="getBadgeColor(entry.tool_name)">{{ entry.tool_name || entry.hook_event_name }}</span>
+                                        <span v-if="entry.data.file_path" class="text-xs text-sky-400 bg-sky-900/20 px-2 py-0.5 rounded border border-sky-900/30 truncate max-w-[200px]" :title="entry.data.file_path">
+                                            {{ getFileName(entry.data.file_path) }}
+                                        </span>
+                                    </div>
+                                    <p class="text-sm text-slate-300 font-mono leading-relaxed truncate-2-lines">
+                                        {{ getSummary(entry) }}
+                                    </p>
+                                </div>
+                                <div class="text-slate-500">
+                                    <svg class="w-5 h-5 transform transition-transform" :class="{'rotate-180': entry.expanded}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </div>
+                            </div>
+
+                            <!-- Detailed View (Expanded) -->
+                            <div v-if="entry.expanded" class="border-t border-slate-700 bg-slate-900/50 p-4 font-mono text-xs">
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <!-- Input -->
+                                    <div>
+                                        <div class="text-slate-500 mb-2 uppercase tracking-wider font-semibold">Input</div>
+                                        <div class="bg-slate-950 rounded p-2 overflow-x-auto border border-slate-800">
+                                            <pre><code class="language-json" v-html="highlight(entry.tool_input || entry.data)"></code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Output -->
+                                    <div v-if="entry.tool_response || entry.error">
+                                        <div class="text-slate-500 mb-2 uppercase tracking-wider font-semibold flex justify-between">
+                                            <span>Result</span>
+                                            <span v-if="entry.error" class="text-red-400">ERROR</span>
+                                        </div>
+                                        <div class="bg-slate-950 rounded p-2 overflow-x-auto border border-slate-800">
+                                            <pre><code class="language-json" v-html="highlight(entry.tool_response || {error: entry.error})"></code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Full Raw Data Toggle -->
+                                <div class="mt-4 pt-4 border-t border-slate-800 text-right">
+                                     <button @click.stop="console.log(entry)" class="text-xs text-slate-500 hover:text-sky-400 underline">Log raw entry to Console</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const logs = ref([]);
+                const sessions = ref([]);
+                const selectedSession = ref('all');
+                const selectedFile = ref(null);
+
+                // --- Parsing Logic ---
+                const parseJSONL = (content) => {
+                    const lines = content.trim().split('
+');
+                    const parsed = [];
+                    const sessionSet = new Set();
+                    
+                    lines.forEach(line => {
+                        try {
+                            if (!line.trim()) return;
+                            const raw = JSON.parse(line);
+                            
+                            // Flatten structure slightly for easier access
+                            const event = {
+                                ...raw,
+                                ...raw.data,
+                                expanded: false
+                            };
+                            
+                            // Extract File Path if present in input
+                            if (event.tool_input && event.tool_input.file_path) {
+                                event.data.file_path = event.tool_input.file_path;
+                            }
+                            
+                            // Determine session
+                            if (event.session_id) sessionSet.add(event.session_id);
+                            
+                            parsed.push(event);
+                        } catch (e) {
+                            console.warn("Failed to parse line:", line);
+                        }
+                    });
+
+                    // Reverse to show newest first, or keep chronological? 
+                    // Chronological (oldest top) is usually better for reading flows.
+                    logs.value = parsed;
+                    sessions.value = Array.from(sessionSet);
+                    // Default to latest session
+                    if (sessions.value.length > 0) {
+                        selectedSession.value = sessions.value[sessions.value.length - 1];
+                    }
+                };
+
+                const handleFileUpload = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => parseJSONL(e.target.result);
+                    reader.readAsText(file);
+                };
+
+                // Setup Drag & Drop
+                onMounted(() => {
+                    const dropZone = document.body;
+                    dropZone.addEventListener('dragover', (e) => e.preventDefault());
+                    dropZone.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files.length) {
+                            const file = e.dataTransfer.files[0];
+                            const reader = new FileReader();
+                            reader.onload = (ev) => parseJSONL(ev.target.result);
+                            reader.readAsText(file);
+                        }
+                    });
+                });
+
+                // --- Computed Stats ---
+                const fileStats = computed(() => {
+                    const stats = {};
+                    logs.value.forEach(log => {
+                        const path = log.data?.file_path || log.tool_input?.file_path;
+                        if (path) {
+                            stats[path] = (stats[path] || 0) + 1;
+                        }
+                    });
+                    return stats;
+                });
+
+                const filteredLogs = computed(() => {
+                    return logs.value.filter(log => {
+                        const matchSession = selectedSession.value === 'all' || log.session_id === selectedSession.value;
+                        const path = log.data?.file_path || log.tool_input?.file_path;
+                        const matchFile = !selectedFile.value || path === selectedFile.value;
+                        return matchSession && matchFile;
+                    });
+                });
+
+                // --- Helpers ---
+                const formatTime = (iso) => {
+                    if (!iso) return '--:--:--';
+                    return new Date(iso).toLocaleTimeString('en-US', { hour12: false });
+                };
+
+                const formatSession = (id) => {
+                    return id ? id.substring(0, 8) + '...' : 'Unknown';
+                };
+
+                const getFileName = (path) => {
+                    if (!path) return '';
+                    return path.split(/[\/]/).pop();
+                };
+
+                const getSummary = (entry) => {
+                    if (entry.tool_name === 'replace') {
+                        return entry.tool_input.instruction || "Replace text in file";
+                    }
+                    if (entry.tool_name === 'run_shell_command') {
+                        return entry.tool_input.command;
+                    }
+                    if (entry.tool_name === 'write_file') {
+                        return `Write ${entry.tool_input.content.length} bytes`;
+                    }
+                    if (entry.tool_name === 'read_file') {
+                        return `Read file`;
+                    }
+                    if (entry.error) {
+                        return entry.error;
+                    }
+                    return JSON.stringify(entry.tool_input).substring(0, 80);
+                };
+
+                const getStatusColor = (entry) => {
+                    if (entry.error || entry.event === 'ERROR') return 'bg-red-500';
+                    if (entry.hook_event_name === 'AfterTool') return 'bg-green-500';
+                    return 'bg-slate-500'; // BeforeTool or Info
+                };
+
+                const getBadgeColor = (tool) => {
+                    const map = {
+                        'replace': 'bg-amber-900 text-amber-200',
+                        'run_shell_command': 'bg-fuchsia-900 text-fuchsia-200',
+                        'read_file': 'bg-blue-900 text-blue-200',
+                        'write_file': 'bg-emerald-900 text-emerald-200'
+                    };
+                    return map[tool] || 'bg-slate-700 text-slate-300';
+                };
+
+                const highlight = (obj) => {
+                    if (!obj) return '';
+                    const str = JSON.stringify(obj, null, 2);
+                    return hljs.highlight(str, { language: 'json' }).value;
+                };
+
+                return {
+                    logs,
+                    sessions,
+                    selectedSession,
+                    selectedFile,
+                    fileStats,
+                    filteredLogs,
+                    handleFileUpload,
+                    formatTime,
+                    formatSession,
+                    getFileName,
+                    getSummary,
+                    getStatusColor,
+                    getBadgeColor,
+                    highlight
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
