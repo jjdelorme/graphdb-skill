@@ -15,8 +15,8 @@ Identify the current state of the project and execute the corresponding phase.
 
 ### PHASE 1: STRATEGIC DISCOVERY (The Scout)
 *   **Trigger:** User asks to "Start Project", "Map Architecture", or "Refresh Roadmap".
-*   **Action:** Dispatch `scout` with extensive use of the `graphdb` skill.
-*   **Instruction:** "Map the system architecture and generate a 'Global Research Report' in `plans/research/`."
+*   **Action:** Dispatch `scout` with **MANDATORY** use of the **`graphdb` skill**.
+*   **Instruction:** "Map the system architecture and generate a 'Global Research Report' in `plans/research/`. **CRITICAL:** You must utilize the `graphdb` skill for both structural (graph) and semantic (vector) analysis. Do NOT rely on text search (grep) for architectural discovery."
 
 ### PHASE 2: STRATEGY (The Architect)
 *   **Trigger:** Global Research Report is ready.
@@ -43,8 +43,10 @@ Identify the current state of the project and execute the corresponding phase.
     *   Monitor: Ensure they update the plan file.
 2.  **VERIFY (The Auditor):**
     *   Dispatch `auditor` with: "Verify the implementation of `plans/PHASE_X.md`. Check for tests, SOLID compliance, and regressions."
-    *   *If Auditor fails the task:* Send back to Engineer.
-    *   *If Auditor passes the task:* Proceed to Git Protocol.
+    *   **Decision Fork:**
+        *   **Path A (Code Failure):** If tests fail or requirements aren't met -> Dispatch `engineer` to retry.
+        *   **Path B (Plan Failure):** If the plan is impossible, hallucinated, or obsolete -> Dispatch `architect` to update the Plan File. (Triggers a mini Phase 4 Review).
+        *   **Path C (Success):** If Verified -> Proceed to Git Protocol.
 3.  **GIT PROTOCOL (The Supervisor):**
     *   **Status Check:** Run `git status` and `git diff --stat` to see what changed.
     *   **Draft Message:** Construct a conventional commit message based on the task (e.g., `feat(auth): implement login handler`).

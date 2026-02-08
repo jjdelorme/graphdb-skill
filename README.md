@@ -2,7 +2,42 @@
 
 ## 🤖 Multi-Agent Orchestration
 
-This project uses a sophisticated multi-agent orchestration pattern to handle complex modernization tasks. 
+This project uses a sophisticated multi-agent orchestration pattern to handle complex modernization tasks. The system is designed to be **self-correcting**, ensuring that plans match reality before code is committed.
+
+### The Protocol Lifecycle
+
+The system moves through distinct phases, enforced by the Supervisor. The **"Three-Way Decision Fork"** in the verification phase ensures plans remain realistic.
+
+```mermaid
+graph TD
+    %% Roles
+    subgraph Phase 1 & 2: Strategy
+        Scout[Scout: Research & Map]
+        Architect[Architect: Plan & Strategy]
+    end
+
+    subgraph Phase 3: Construction
+        Engineer[Engineer: Implement]
+        Auditor[Auditor: Verify]
+    end
+
+    %% Flow
+    Start([User Start]) --> Scout
+    Scout --> Architect
+    Architect --> Review{User Approval}
+    
+    Review -- Reject --> Architect
+    Review -- Approve --> Engineer
+    
+    Engineer --> Auditor
+    
+    %% The Three-Way Fork
+    Auditor -- Code Broken? --> Engineer
+    Auditor -- Plan Wrong? --> Architect
+    Auditor -- Verified --> Commit([Git Commit])
+    
+    Commit --> Engineer
+```
 
 ### The Supervisor (System Prompt)
 The orchestration is managed by a **Supervisor protocol** defined in `.gemini/system.md`. 
@@ -12,11 +47,14 @@ The orchestration is managed by a **Supervisor protocol** defined in `.gemini/sy
 ### Specialized Sub-Agents
 Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
 
-*   **Architect**: The planner. Manages the roadmap (`@plans/`), prioritizes technical debt, and creates detailed implementation plans.
-*   **Scout**: The researcher. Uses the GraphDB to map dependencies, identify global state usage, and find architectural "seams" for refactoring.
-*   **Engineer**: The builder. Implements changes using strict Test-Driven Development (TDD). **Constraint:** Cannot perform git commits.
-*   **Auditor**: The gatekeeper. Verifies quality standards and passes tests. **Constraint:** Cannot perform git commits.
-*   **MSBuild**: The specialist. Handles running builds and tests, providing concise error reporting.
+*   **Architect**: The **Planner**. Manages the roadmap (`@plans/`) and creates detailed implementation plans. Called when plans are missing or need correction (reality check).
+*   **Scout**: The **Researcher**. Uses the GraphDB to map dependencies, identify global state usage, and find architectural "seams".
+*   **Engineer**: The **Builder**. Implements changes using strict Test-Driven Development (TDD). **Constraint:** Cannot perform git commits.
+*   **Auditor**: The **Quality & Consistency Gatekeeper**. Verifies tests and ensures the active Plan matches the Codebase reality.
+    *   *Code Failure:* Dispatches `engineer` to retry.
+    *   *Plan Failure:* Dispatches `architect` to fix the plan.
+    *   *Success:* Allows the Supervisor to proceed to Git Commit.
+*   **MSBuild**: The **Specialist**. Handles running builds and tests, providing concise error reporting.
 
 ## 🛠️ Build & Ingestion Workflow
 
@@ -38,34 +76,24 @@ To analyze a codebase, you must first ingest it into the Graph Database. Run the
 
 ## 🔍 Usage & Analysis
 
-The project follows a **"Search-Refine-Analyze"** workflow:
+The project follows a **"Graph-First"** workflow powered by the **`graphdb` skill**. This specialized skill provides a unified interface for both structural (Neo4j) and semantic (Vector Embeddings) analysis.
 
-### 1. Discovery (Ripgrep)
-Use standard `search_file_content` to find initial keywords and entry points.
+### 1. Structural & Semantic Analysis (The `graphdb` Skill - PRIMARY)
+**ALWAYS START HERE.** You must activate the `graphdb` skill (`activate_skill(name="graphdb")`) to access its specialized investigative capabilities.
 
-### 2. Structural Analysis (GraphDB)
-Use the CLI tools to understand deep dependencies.
-
-*   **Find Seams (Decoupling Points):**
+*   **Structural Queries (Relationships):** Map inheritance, function calls, and global state.
     ```bash
-    node .gemini/skills/graphdb/scripts/query_graph.js seams --module <ModuleName>
+    node .gemini/skills/graphdb/scripts/query_graph.js <command>
     ```
-*   **Analyze Test Context:**
+*   **Semantic Queries (Vectors):** Find code by *meaning* rather than syntax using the skill's vector search capabilities.
     ```bash
-    node .gemini/skills/graphdb/scripts/query_graph.js test-context --function <FunctionName>
-    ```
-*   **Check Hotspots:**
-    ```bash
-    node .gemini/skills/graphdb/scripts/query_graph.js hotspots --module <ModuleName>
+    node .gemini/skills/graphdb/scripts/find_implicit_links.js --query "business logic for..."
     ```
 
-### 3. Semantic Search (Implicit Links)
-Find code by *meaning* rather than exact syntax (e.g., finding SQL strings that modify a table).
+### 2. Text Search (Fallback)
+Use standard `search_file_content` (Ripgrep) **ONLY** when the `graphdb` skill cannot provide the necessary data (e.g., searching for non-code assets or literal TODOs).
 
-*   **Search:**
-    ```bash
-    node .gemini/skills/graphdb/scripts/find_implicit_links.js --query "natural language query"
-    ```
+**⚠️ WARNING:** Relying on grep for dependency or architectural analysis is prohibited. The `graphdb` skill is the source of truth for code relationships.
 
 ## ⚡ Utilities (Neo4j Manager)
 
@@ -95,8 +123,15 @@ To understand the complex interactions between agents (e.g., CLI -> Supervisor -
 
 A lightweight, single-file HTML viewer is included to visualize the trace logs.
 
-1.  **Open:** Open `trace-viewer.html` in any modern browser.
-2.  **Load:** Drag & Drop `.gemini/execution-trace.jsonl` onto the page.
-3.  **Analyze:** Filter by session or file to see the chronological lineage of agent operations.
+1.  **Start Server:** (Optional but recommended for browser compatibility)
+    ```bash
+    # Option A: Node.js
+    npx http-server .
+    # Option B: Python
+    python3 -m http.server 8080
+    ```
+2.  **Open:** Navigate to `http://localhost:8080/trace-viewer.html` (or open the file directly in a modern browser).
+3.  **Load:** Drag & Drop `.gemini/execution-trace.jsonl` onto the page.
+4.  **Analyze:** Filter by session or file to see the chronological lineage of agent operations.
 
 To disable tracing, remove the `hooks` section from `.gemini/settings.json`.

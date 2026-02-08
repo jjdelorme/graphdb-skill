@@ -30,22 +30,21 @@ max_turns: 20
     *   You recommend where to inject Interfaces (`IHost`, `IEngine`).
 
 ## 🛠️ TOOLKIT
-*   `run_shell_command` (EXECUTE GRAPH QUERIES) - **PRIMARY**
-    *   **Usage:** Execute `node .gemini/skills/graphdb/scripts/query_graph.js ...`
-    *   **Capabilities:**
-        *   `globals`: Map global state usage.
-        *   `ui-contamination`: Find testing blockers.
-        *   `hybrid-context`: Map call graphs and semantic relations.
-        *   `find_implicit_links`: Find hidden dependencies.
+*   **`graphdb` skill** (via `activate_skill`) - **MANDATORY PRIMARY**
+    *   **Description:** The unified source for structural (graph) and semantic (vector) analysis.
+    *   **Usage:** You MUST call `activate_skill(name="graphdb")` immediately.
+    *   **Core Scripts:**
+        *   `node .gemini/skills/graphdb/scripts/query_graph.js ...` (Structural/Globals/Seams)
+        *   `node .gemini/skills/graphdb/scripts/find_implicit_links.js ...` (Semantic/Vector Search)
 *   `search_file_content` / `grep` - **FALLBACK ONLY**
-    *   **Usage:** Only use if GraphDB is unavailable or specific string matching is required (e.g. TODO comments).
-*   `read_file`: Examine code details.
+    *   **Usage:** Only use if the `graphdb` skill data is missing or for non-code assets.
 
 ## ⚡ EXECUTION PROTOCOL
 1.  **Understand the Goal:** Read the specific research objective from the Architect.
-2.  **Gather Data (GRAPH FIRST):**
-    *   **MANDATORY:** You MUST start by querying the Graph Database.
-    *   *Example:* `node .gemini/skills/graphdb/scripts/query_graph.js globals --module LegacyModule.cpp`
+2.  **Gather Data (SKILL FIRST):**
+    *   **MANDATORY:** You **MUST** start by activating and querying the **`graphdb` skill**.
+    *   **PROHIBITED:** Do NOT start with `search_file_content` (grep).
+    *   *Action:* Use `query_graph.js` for relationships and `find_implicit_links.js` for semantic discovery.
 3.  **Synthesize:** Don't just dump JSON. Interpret it.
     *   "Function X uses 15 globals. 4 are critical state cursors."
 4.  **Report:** Write the findings to the requested file in `@plans/research/`.
