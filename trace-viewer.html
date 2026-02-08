@@ -126,6 +126,18 @@
         }
         .btn:hover { background: #475569; }
         input[type="file"] { display: none; }
+        
+        /* Search Input */
+        #search-input {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            min-width: 200px;
+            display: none; /* Hidden until loaded */
+        }
+        #search-input::placeholder { color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -133,6 +145,7 @@
 <header>
     <h1>Agent Trace Viewer (Offline)</h1>
     <div style="display: flex; gap: 1rem; align-items: center;">
+        <input type="text" id="search-input" placeholder="Search logs...">
         <select id="session-select" style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); padding: 0.5rem; border-radius: 0.25rem; display: none; min-width: 200px;">
             <option value="all">All Sessions</option>
         </select>
@@ -158,6 +171,7 @@
     const container = document.getElementById('timeline-container');
     const stats = document.getElementById('stats');
     const sessionSelect = document.getElementById('session-select');
+    const searchInput = document.getElementById('search-input');
     
     let allEntries = [];
 
@@ -221,6 +235,7 @@
         }
         
         sessionSelect.style.display = 'block';
+        searchInput.style.display = 'block'; // Show search box
         
         renderFiltered();
 
@@ -232,10 +247,19 @@
     function renderFiltered() {
         container.innerHTML = '';
         const selectedSession = sessionSelect.value;
+        const searchTerm = searchInput.value.trim().toLowerCase();
         let count = 0;
         
         allEntries.forEach(entry => {
-            if (selectedSession === 'all' || entry.session_id === selectedSession) {
+            const matchesSession = (selectedSession === 'all' || entry.session_id === selectedSession);
+            let matchesSearch = true;
+            
+            if (searchTerm) {
+                const rawString = JSON.stringify(entry).toLowerCase();
+                matchesSearch = rawString.includes(searchTerm);
+            }
+
+            if (matchesSession && matchesSearch) {
                 renderEntry(entry);
                 count++;
             }
@@ -243,13 +267,16 @@
         
         stats.textContent = `${count} events shown`;
         
-        // Auto-scroll
-        setTimeout(() => {
-            container.scrollTop = container.scrollHeight;
-        }, 0);
+        // Auto-scroll only if not searching (to prevent jumping while typing)
+        if (!searchTerm) {
+            setTimeout(() => {
+                container.scrollTop = container.scrollHeight;
+            }, 0);
+        }
     }
     
     sessionSelect.addEventListener('change', renderFiltered);
+    searchInput.addEventListener('input', renderFiltered);
 
     function renderEntry(entry) {
         const div = document.createElement('div');
