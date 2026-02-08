@@ -133,7 +133,7 @@
 <header>
     <h1>Agent Trace Viewer (Offline)</h1>
     <div style="display: flex; gap: 1rem; align-items: center;">
-        <select id="session-select" style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); padding: 0.5rem; border-radius: 0.25rem; display: none;">
+        <select id="session-select" style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); padding: 0.5rem; border-radius: 0.25rem; display: none; min-width: 200px;">
             <option value="all">All Sessions</option>
         </select>
         <span id="stats" style="font-size: 0.9rem; color: var(--text-muted);"></span>
@@ -211,7 +211,7 @@
         sessionList.forEach(s => {
             const opt = document.createElement('option');
             opt.value = s;
-            opt.textContent = s.substring(0, 8) + '...';
+            opt.textContent = s.substring(0, 16) + '...';
             sessionSelect.appendChild(opt);
         });
         
