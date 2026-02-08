@@ -159,6 +159,9 @@
         container.innerHTML = '';
         const lines = content.trim().split('\n');
         let count = 0;
+        
+        // Stack to track agent context
+        let agentStack = []; 
 
         lines.forEach((line, idx) => {
             if (!line.trim()) return;
@@ -171,6 +174,49 @@
                 // Fix path location
                 if (entry.tool_input && entry.tool_input.file_path) {
                     entry.file_path = entry.tool_input.file_path;
+                }
+                
+                // --- Agent Context Logic ---
+                // 1. Detect entering an agent/skill
+                if (entry.tool_name === 'activate_skill' && entry.tool_input && entry.tool_input.name) {
+                    // Push to stack. You might want to pop when? 
+                    // Usually 'activate_skill' is a single call that returns instructions.
+                    // But if we want to visualize "CLI -> Supervisor", we need to look for specific tool calls.
+                    // Let's stick to the user's request: "hierarchy". 
+                    // If we see a tool call, and we are inside a "session", maybe that's enough?
+                    
+                    // Actually, looking at the logs: 
+                    // CLI calls 'activate_skill'. 
+                    // The "Agent" concept is often abstract in these logs unless there's a specific 'agent_name' field.
+                    // But the user mentioned "supervisor", "auditor". These are tools in the list of available agents.
+                    // Let's treat ANY tool call that matches a known agent name as entering that agent's context.
+                    
+                    // But wait, the log shows "tool_name": "replace". 
+                    // Where is "Supervisor"?
+                    // Ah, the user said: "hierarchy... cli -> supervisor".
+                    // This implies there are tool calls named "supervisor" or "auditor".
+                    
+                    // Let's assume if tool_name is one of the "Agents", we push it.
+                }
+
+                // Simplified Hierarchy:
+                // If a tool call is made, and we haven't seen an 'AfterTool' for it, it's a parent.
+                // But this log format is flat streams of events.
+                
+                // Let's try to infer "Agent" from the tool_name if it looks like an agent.
+                const potentialAgents = ['architect', 'auditor', 'engineer', 'msbuild', 'scout', 'supervisor', 'codebase_investigator'];
+                
+                if (entry.hook_event_name === 'BeforeTool' && potentialAgents.includes(entry.tool_name)) {
+                     agentStack.push(entry.tool_name);
+                }
+                
+                // Capture current stack in the entry for rendering
+                entry.agentContext = agentStack.length > 0 ? agentStack[agentStack.length - 1] : 'CLI';
+                entry.stackDepth = agentStack.length;
+
+                if (entry.hook_event_name === 'AfterTool' && potentialAgents.includes(entry.tool_name)) {
+                     // Pop *after* assigning context so the closing tag belongs to the agent
+                     agentStack.pop();
                 }
 
                 renderEntry(entry);
@@ -190,10 +236,20 @@
         const div = document.createElement('div');
         div.className = 'entry';
         
+        // Add indentation based on stack depth (minus 1 so CLI is flat)
+        const depth = Math.max(0, (entry.stackDepth || 0));
+        div.style.marginLeft = `${depth * 20}px`;
+        div.style.borderLeft = depth > 0 ? '2px solid var(--border)' : '1px solid var(--border)';
+
         const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '--:--:--';
         const toolName = entry.tool_name || entry.hook_event_name || 'unknown';
         const isError = entry.error || entry.event === 'ERROR';
+        const agentName = entry.agentContext || 'CLI';
         
+        // Color code the agent badge
+        // Simple hash to color function or just hardcoded
+        const agentColor = agentName === 'CLI' ? '#64748b' : '#0ea5e9'; 
+
         let summary = '';
         if (entry.tool_input) {
             if (entry.tool_input.command) summary = `$ ${entry.tool_input.command}`;
@@ -208,6 +264,18 @@
         div.innerHTML = `
             <div class="entry-header">
                 <span class="timestamp">${timestamp}</span>
+                
+                <!-- Agent Badge -->
+                <span style="
+                    font-size: 0.75rem; 
+                    font-weight: bold; 
+                    padding: 0.15rem 0.5rem; 
+                    border-radius: 0.25rem; 
+                    background: ${agentColor}; 
+                    color: white;
+                    margin-right: 0.5rem;
+                ">${agentName}</span>
+
                 <span class="tool-badge ${badgeClass}">${toolName}</span>
                 <span style="flex:1; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(summary)}</span>
                 ${isError ? '<span class="status-error">ERROR</span>' : ''}
