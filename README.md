@@ -83,4 +83,12 @@ To understand the complex interactions between agents (e.g., CLI -> Supervisor -
     *   Debug "Human in the Loop" interactions (e.g., does the stack unwind or pause?).
     *   Audit tool usage and arguments in real-time.
 
-To disable this, remove the `hooks` section from `.gemini/settings.json`.
+### 📊 Trace Viewer
+
+A lightweight, single-file HTML viewer is included to visualize the trace logs.
+
+1.  **Open:** Open `trace-viewer.html` in any modern browser.
+2.  **Load:** Drag & Drop `.gemini/execution-trace.jsonl` onto the page.
+3.  **Analyze:** Filter by session or file to see the chronological lineage of agent operations.
+
+To disable tracing, remove the `hooks` section from `.gemini/settings.json`.
