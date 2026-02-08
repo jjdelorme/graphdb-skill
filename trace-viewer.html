@@ -198,15 +198,20 @@
             }
         });
 
-        // Render in reverse (Newest first)
-        for (let i = entries.length - 1; i >= 0; i--) {
-            renderEntry(entries[i]);
-        }
+        // Render in Chronological Order (Oldest first) matches the "Tree" mental model
+        entries.forEach(entry => {
+            renderEntry(entry);
+        });
 
         // UI Updates
         dropZone.style.display = 'none';
         container.style.display = 'block';
         stats.textContent = `${count} events loaded`;
+        
+        // Auto-scroll to bottom to see latest
+        setTimeout(() => {
+            container.scrollTop = container.scrollHeight;
+        }, 0);
     }
 
     function renderEntry(entry) {
