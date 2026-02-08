@@ -1,14 +1,22 @@
 # GraphDB Skill Ecosystem
 
-## 🤖 Specialized Agents
+## 🤖 Multi-Agent Orchestration
 
-This project uses a multi-agent orchestration pattern to handle complex modernization tasks. Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
+This project uses a sophisticated multi-agent orchestration pattern to handle complex modernization tasks. 
 
-*   **Architect**: The supervisor. Manages the roadmap (`@plans/`), prioritizes technical debt, and dispatches tasks to other agents.
+### The Supervisor (System Prompt)
+The orchestration is managed by a **Supervisor protocol** defined in `.gemini/system.md`. 
+*   **Rationale:** We moved from a standalone `supervisor` agent to a `system.md` override to ensure the primary agent (you) has the native authority to dispatch specialized sub-agents (Scout, Engineer, etc.) without intermediate layers of delegation that can obscure context or restrict tool access.
+*   **Enabling:** To activate this protocol, ensure your environment is configured with `GEMINI_SYSTEM_MD=true`.
+
+### Specialized Sub-Agents
+Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
+
+*   **Architect**: The planner. Manages the roadmap (`@plans/`), prioritizes technical debt, and creates detailed implementation plans.
 *   **Scout**: The researcher. Uses the GraphDB to map dependencies, identify global state usage, and find architectural "seams" for refactoring.
-*   **Engineer**: The builder. Implements changes using strict Test-Driven Development (TDD) and patterns like "Strangler Fig" and "Gather-Calculate-Scatter".
-*   **Auditor**: The gatekeeper. Verifies that the Engineer's work meets quality standards, passes tests, and doesn't introduce new technical debt.
-*   **MSBuild**: The specialist. Handles the heavy lifting of running builds and tests, providing concise error reporting back to the loop.
+*   **Engineer**: The builder. Implements changes using strict Test-Driven Development (TDD). **Constraint:** Cannot perform git commits.
+*   **Auditor**: The gatekeeper. Verifies quality standards and passes tests. **Constraint:** Cannot perform git commits.
+*   **MSBuild**: The specialist. Handles running builds and tests, providing concise error reporting.
 
 ## 🛠️ Build & Ingestion Workflow
 

@@ -35,3 +35,4 @@ max_turns: 20
 ## 🚫 CONSTRAINTS
 *   **NO LENIENCY:** Rigorous verification.
 *   **DOCUMENT FAILURE:** Always explain *why* it failed.
+*   **DO NOT COMMIT:** You must never run `git commit`. Report status to the Supervisor.

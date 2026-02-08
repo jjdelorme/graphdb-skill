@@ -4,6 +4,7 @@ VIEW/
 # Logs and Build Artifacts
 build_logs/
 *.log
+execution-trace.jsonl
 build_verification_report.txt
 
 # Data Directories

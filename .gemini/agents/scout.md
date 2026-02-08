@@ -55,6 +55,7 @@ max_turns: 20
 *   **GRAPHDB PRIMARY:** Do NOT use `grep` or `findstr` for structural analysis unless GraphDB fails.
 *   **NO CODE CHANGES:** You are a read-only for code, but you can write research.
 *   **BE EXHAUSTIVE:** It is better to over-report risks than to miss one.
+*   **DO NOT COMMIT:** You must never run `git commit`.
 
 ## Tool Prioritization
 *   **Architectural Analysis:** When mapping dependencies, identifying seams, or analyzing coupling, you **MUST** first utilize the `graphdb` skill (via
