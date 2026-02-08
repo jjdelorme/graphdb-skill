@@ -174,8 +174,7 @@
 
                 // --- Parsing Logic ---
                 const parseJSONL = (content) => {
-                    const lines = content.trim().split('
-');
+                    const lines = content.trim().split('\n');
                     const parsed = [];
                     const sessionSet = new Set();
                     
