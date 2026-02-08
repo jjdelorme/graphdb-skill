@@ -1,0 +1,52 @@
+{
+  "hooks": {
+    "BeforeAgent": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "trace-before-agent",
+            "type": "command",
+            "command": "node .gemini/hooks/agent-tracer.js"
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "trace-after-agent",
+            "type": "command",
+            "command": "node .gemini/hooks/agent-tracer.js"
+          }
+        ]
+      }
+    ],
+    "BeforeTool": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "trace-before-tool",
+            "type": "command",
+            "command": "node .gemini/hooks/agent-tracer.js"
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "trace-after-tool",
+            "type": "command",
+            "command": "node .gemini/hooks/agent-tracer.js"
+          }
+        ]
+      }
+    ]
+  }
+}

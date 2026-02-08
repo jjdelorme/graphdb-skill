@@ -71,3 +71,16 @@ If you need to switch between different project databases (Neo4j Community limit
     ```bash
     node .gemini/skills/neo4j-manager/scripts/switch_database.js <TargetDBName>
     ```
+
+## 🕵️ Agent Execution Tracing
+
+To understand the complex interactions between agents (e.g., CLI -> Supervisor -> Engineer), the project includes a configured execution tracer.
+
+*   **Log File:** `.gemini/execution-trace.jsonl`
+*   **Mechanism:** A hook script (`.gemini/hooks/agent-tracer.js`) intercepts `BeforeAgent`, `AfterAgent`, `BeforeTool`, and `AfterTool` events.
+*   **Purpose:**
+    *   Visualize the call stack of nested agents.
+    *   Debug "Human in the Loop" interactions (e.g., does the stack unwind or pause?).
+    *   Audit tool usage and arguments in real-time.
+
+To disable this, remove the `hooks` section from `.gemini/settings.json`.
