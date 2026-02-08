@@ -190,7 +190,191 @@
 <div id="timeline-container"></div>
 
 <script>
-    // --- Logic ---
+    // --- Data Models & Strategies ---
+
+    /**
+     * Standardized Log Entry for UI Rendering
+     */
+    class LogEntry {
+        constructor({ timestamp, type, category, summary, details, agent, depth, isError }) {
+            this.timestamp = timestamp;
+            this.type = type;         // 'tool', 'user', 'assistant', 'thought', 'system'
+            this.category = category; // Used for badges (e.g., 'run_shell_command', 'User')
+            this.summary = summary;   // Main text to display
+            this.details = details;   // JSON object for expanded view
+            this.agent = agent || 'CLI';
+            this.depth = depth || 0;
+            this.isError = isError || false;
+        }
+    }
+
+    /**
+     * Base Strategy
+     */
+    class LogStrategy {
+        canParse(content) { return false; }
+        parse(content) { return []; }
+    }
+
+    /**
+     * Strategy: .gemini/execution-trace.jsonl
+     * Handles newline-delimited JSON trace events.
+     */
+    class ExecutionTraceStrategy extends LogStrategy {
+        canParse(content) {
+            // fast fail
+            if (!content || content.trim().length === 0) return false;
+
+            const lines = content.trim().split('\n');
+            if (lines.length === 0) return false;
+            
+            try {
+                // Check the first non-empty line
+                const firstLine = lines[0].trim();
+                const json = JSON.parse(firstLine);
+                
+                // Heuristic: Must look like a trace entry
+                return !!(json.hook_event_name || json.tool_name || json.timestamp || json.event); 
+            } catch (e) { 
+                return false; 
+            }
+        }
+
+        parse(content) {
+            const lines = content.trim().split('\n');
+            let agentStack = [];
+            let entries = [];
+            const potentialAgents = ['architect', 'auditor', 'engineer', 'msbuild', 'scout', 'supervisor', 'codebase_investigator'];
+
+            lines.forEach((line, idx) => {
+                if (!line.trim()) return;
+                try {
+                    const raw = JSON.parse(line);
+                    const data = (raw.data && typeof raw.data === 'object') ? raw.data : {};
+                    const merged = { ...raw, ...data };
+
+                    // Stack Logic
+                    if (merged.hook_event_name === 'BeforeTool' && potentialAgents.includes(merged.tool_name)) {
+                        agentStack.push(merged.tool_name);
+                    }
+                    
+                    const currentAgent = agentStack.length > 0 ? agentStack[agentStack.length - 1] : 'CLI';
+                    // Calculate depth: if it's the agent tool itself, it's at parent depth, else inside
+                    const isAgentContainer = merged.hook_event_name && potentialAgents.includes(merged.tool_name);
+                    const depth = Math.max(0, agentStack.length - (isAgentContainer ? 1 : 0));
+
+                    if (merged.hook_event_name === 'AfterTool' && potentialAgents.includes(merged.tool_name)) {
+                        agentStack.pop();
+                    }
+
+                    // Map to Standard LogEntry
+                    entries.push(new LogEntry({
+                        timestamp: merged.timestamp,
+                        type: 'tool',
+                        category: merged.tool_name || merged.hook_event_name || 'unknown',
+                        summary: this._getSummary(merged),
+                        details: { ...merged.tool_input, ...merged.data, response: merged.tool_response },
+                        agent: currentAgent,
+                        depth: depth,
+                        isError: merged.error || merged.event === 'ERROR'
+                    }));
+
+                } catch (e) {
+                    console.warn("Trace parse error line", idx, e);
+                }
+            });
+            return entries;
+        }
+
+        _getSummary(entry) {
+            if (entry.tool_input) {
+                if (entry.tool_input.command) return `$ ${entry.tool_input.command}`;
+                if (entry.tool_input.instruction) return `Replace: ${entry.tool_input.instruction}`;
+                return JSON.stringify(entry.tool_input).substring(0, 100);
+            }
+            if (entry.data) return JSON.stringify(entry.data).substring(0, 100);
+            return '';
+        }
+    }
+
+    /**
+     * Strategy: chats/session-*.json
+     * Handles standard JSON session history objects.
+     */
+    class SessionLogStrategy extends LogStrategy {
+        canParse(content) {
+            try {
+                // Check if it's a single object with a 'messages' array
+                const json = JSON.parse(content);
+                return json.messages && Array.isArray(json.messages);
+            } catch (e) { return false; }
+        }
+
+        parse(content) {
+            const session = JSON.parse(content);
+            const entries = [];
+            
+            session.messages.forEach(msg => {
+                const baseTime = msg.timestamp;
+                
+                // 1. User Message
+                if (msg.type === 'user') {
+                    entries.push(new LogEntry({
+                        timestamp: baseTime,
+                        type: 'user',
+                        category: 'USER',
+                        summary: msg.content,
+                        details: { full_content: msg.content },
+                        agent: 'User',
+                        depth: 0
+                    }));
+                }
+                
+                // 2. Model Response (Gemini)
+                if (msg.type === 'gemini') {
+                    // 2a. Thoughts (Reasoning)
+                    if (msg.thoughts && Array.isArray(msg.thoughts)) {
+                        msg.thoughts.forEach(thought => {
+                            entries.push(new LogEntry({
+                                timestamp: thought.timestamp || baseTime,
+                                type: 'thought',
+                                category: 'THOUGHT',
+                                summary: thought.subject || 'Reasoning',
+                                details: { description: thought.description },
+                                agent: 'Gemini',
+                                depth: 1 // Indent thoughts slightly
+                            }));
+                        });
+                    }
+
+                    // 2b. Tool Calls (if present in this format, or implied)
+                    // Note: Current session format might not explicitly list tool calls as separate items 
+                    // unless they are structured in a specific way. We'll map the main content.
+
+                    // 2c. Main Content
+                    if (msg.content) {
+                        entries.push(new LogEntry({
+                            timestamp: msg.lastUpdated || baseTime, // Approximate end time
+                            type: 'assistant',
+                            category: 'RESPONSE',
+                            summary: msg.content,
+                            details: { 
+                                full_content: msg.content,
+                                tokens: msg.tokens 
+                            },
+                            agent: 'Gemini',
+                            depth: 0
+                        }));
+                    }
+                }
+            });
+            
+            return entries;
+        }
+    }
+
+    // --- Main Logic ---
+
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const container = document.getElementById('timeline-container');
@@ -199,139 +383,90 @@
     const searchInput = document.getElementById('search-input');
     const loadingOverlay = document.getElementById('loading-overlay');
     
+    // Register Strategies
+    const strategies = [new ExecutionTraceStrategy(), new SessionLogStrategy()];
+
     let allEntries = [];
 
     function parseAndRender(content) {
         container.innerHTML = '';
-        const lines = content.trim().split('\n');
+        allEntries = [];
         
-        let agentStack = []; 
-        let entries = [];
-        let sessions = new Set();
-
-        lines.forEach((line, idx) => {
-            if (!line.trim()) return;
-            try {
-                const raw = JSON.parse(line);
-                const data = (raw.data && typeof raw.data === 'object') ? raw.data : {};
-                const entry = { ...raw, ...data };
-                
-                if (entry.tool_input && entry.tool_input.file_path) {
-                    entry.file_path = entry.tool_input.file_path;
-                }
-                
-                // Track Sessions
-                if (entry.session_id) sessions.add(entry.session_id);
-                
-                // --- Agent Context Logic ---
-                const potentialAgents = ['architect', 'auditor', 'engineer', 'msbuild', 'scout', 'supervisor', 'codebase_investigator'];
-                
-                if (entry.hook_event_name === 'BeforeTool' && potentialAgents.includes(entry.tool_name)) {
-                     agentStack.push(entry.tool_name);
-                }
-                
-                entry.agentContext = agentStack.length > 0 ? agentStack[agentStack.length - 1] : 'CLI';
-                entry.stackDepth = Math.max(0, agentStack.length - (entry.hook_event_name === 'BeforeTool' && potentialAgents.includes(entry.tool_name) ? 1 : 0));
-
-                if (entry.hook_event_name === 'AfterTool' && potentialAgents.includes(entry.tool_name)) {
-                     agentStack.pop();
-                }
-
-                entries.push(entry);
-            } catch (e) {
-                console.error("Parse error line", idx, e);
-            }
-        });
+        // 1. Select Strategy
+        const strategy = strategies.find(s => s.canParse(content));
         
-        allEntries = entries;
-        
-        // Populate Session Dropdown
-        const sessionList = Array.from(sessions);
-        sessionSelect.innerHTML = '<option value="all">All Sessions</option>';
-        sessionList.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s;
-            opt.textContent = s.substring(0, 16) + '...';
-            sessionSelect.appendChild(opt);
-        });
-        
-        // Default to latest session if available
-        if (sessionList.length > 0) {
-            sessionSelect.value = sessionList[sessionList.length - 1];
+        if (!strategy) {
+            alert("Unknown file format. Please upload a valid .jsonl trace or session .json file.");
+            return;
         }
-        
-        sessionSelect.style.display = 'block';
-        searchInput.style.display = 'block'; // Show search box
+
+        console.log("Using Strategy:", strategy.constructor.name);
+
+        // 2. Parse
+        try {
+            allEntries = strategy.parse(content);
+        } catch (e) {
+            console.error("Parsing failed:", e);
+            alert("Parsing failed: " + e.message);
+            return;
+        }
+
+        // 3. UI Setup
+        sessionSelect.style.display = 'none'; // Sessions usually single file, simplified for now
+        searchInput.style.display = 'block';
         
         renderFiltered();
 
-        // UI Updates
         dropZone.style.display = 'none';
         container.style.display = 'block';
     }
     
     function renderFiltered() {
         container.innerHTML = '';
-        const selectedSession = sessionSelect.value;
         const searchTerm = searchInput.value.trim().toLowerCase();
         let count = 0;
         
         allEntries.forEach(entry => {
-            const matchesSession = (selectedSession === 'all' || entry.session_id === selectedSession);
             let matchesSearch = true;
-            
             if (searchTerm) {
-                const rawString = JSON.stringify(entry).toLowerCase();
+                const rawString = (entry.summary + JSON.stringify(entry.details)).toLowerCase();
                 matchesSearch = rawString.includes(searchTerm);
             }
 
-            if (matchesSession && matchesSearch) {
+            if (matchesSearch) {
                 renderEntry(entry);
                 count++;
             }
         });
         
         stats.textContent = `${count} events shown`;
-        
-        // Auto-scroll only if not searching (to prevent jumping while typing)
-        if (!searchTerm) {
-            setTimeout(() => {
-                container.scrollTop = container.scrollHeight;
-            }, 0);
-        }
     }
     
-    sessionSelect.addEventListener('change', renderFiltered);
     searchInput.addEventListener('input', renderFiltered);
 
     function renderEntry(entry) {
         const div = document.createElement('div');
         div.className = 'entry';
         
-        // Add indentation based on stack depth (minus 1 so CLI is flat)
-        const depth = Math.max(0, (entry.stackDepth || 0));
-        div.style.marginLeft = `${depth * 20}px`;
-        div.style.borderLeft = depth > 0 ? '2px solid var(--border)' : '1px solid var(--border)';
+        // Depth Indentation
+        div.style.marginLeft = `${entry.depth * 20}px`;
+        div.style.borderLeft = entry.depth > 0 ? '2px solid var(--border)' : '1px solid var(--border)';
 
-        const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '--:--:--';
-        const toolName = entry.tool_name || entry.hook_event_name || 'unknown';
-        const isError = entry.error || entry.event === 'ERROR';
-        const agentName = entry.agentContext || 'CLI';
+        // Styling based on Type/Category
+        const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '';
+        const isError = entry.isError;
         
-        // Color code the agent badge
-        // Simple hash to color function or just hardcoded
-        const agentColor = agentName === 'CLI' ? '#64748b' : '#0ea5e9'; 
-
-        let summary = '';
-        if (entry.tool_input) {
-            if (entry.tool_input.command) summary = `$ ${entry.tool_input.command}`;
-            else if (entry.tool_input.instruction) summary = `Replace: ${entry.tool_input.instruction}`;
-            else summary = JSON.stringify(entry.tool_input).substring(0, 80);
-        } else if (entry.data) {
-             summary = JSON.stringify(entry.data).substring(0, 80);
-        }
-
-        const badgeClass = `tool-${toolName}`;
+        // Badge Color Logic
+        let badgeColor = '#334155'; // Default
+        let badgeTextColor = '#cbd5e1';
+        
+        if (entry.category === 'USER') { badgeColor = '#0f766e'; badgeTextColor = '#99f6e4'; } // Teal
+        if (entry.category === 'RESPONSE') { badgeColor = '#1e3a8a'; badgeTextColor = '#bfdbfe'; } // Blue
+        if (entry.category === 'THOUGHT') { badgeColor = '#4c1d95'; badgeTextColor = '#ddd6fe'; } // Purple
+        if (entry.category === 'run_shell_command') { badgeColor = '#4a044e'; badgeTextColor = '#f0abfc'; }
+        
+        // Agent Badge Logic
+        const agentColor = (entry.agent === 'CLI' || entry.agent === 'User') ? '#64748b' : '#0ea5e9';
 
         div.innerHTML = `
             <div class="entry-header">
@@ -346,24 +481,27 @@
                     background: ${agentColor}; 
                     color: white;
                     margin-right: 0.5rem;
-                ">${agentName}</span>
+                ">${entry.agent}</span>
 
-                <span class="tool-badge ${badgeClass}">${toolName}</span>
-                <span style="flex:1; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(summary)}</span>
+                <!-- Category/Tool Badge -->
+                <span class="tool-badge" style="background: ${badgeColor}; color: ${badgeTextColor};">
+                    ${entry.category}
+                </span>
+
+                <!-- Summary -->
+                <span style="flex:1; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${escapeHtml(entry.summary)}
+                </span>
+                
                 ${isError ? '<span class="status-error">ERROR</span>' : ''}
             </div>
+            
+            <!-- Details Expansion -->
             <div class="entry-details">
-                <div style="color: var(--text-muted); margin-bottom: 0.5rem;">Input / Data:</div>
-                <div>${escapeHtml(JSON.stringify(entry.tool_input || entry.data || {}, null, 2))}</div>
-                
-                ${entry.tool_response ? `
-                    <div style="color: var(--text-muted); margin-top: 1rem; margin-bottom: 0.5rem;">Response:</div>
-                    <div>${escapeHtml(JSON.stringify(entry.tool_response, null, 2))}</div>
-                ` : ''}
+                <div>${escapeHtml(JSON.stringify(entry.details, null, 2))}</div>
             </div>
         `;
 
-        // Toggle
         div.querySelector('.entry-header').addEventListener('click', () => {
             div.classList.toggle('expanded');
         });
@@ -373,7 +511,7 @@
 
     function escapeHtml(text) {
         if (!text) return '';
-        return text
+        return String(text)
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
@@ -381,15 +519,13 @@
             .replace(/'/g, "&#039;");
     }
 
-    // --- Events ---
-    
-    // File Input
+    // --- Events (Unchanged) ---
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) readFile(file);
+        fileInput.value = ''; 
     });
 
-    // Drag & Drop
     window.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('dragover');
@@ -410,7 +546,6 @@
         loadingOverlay.classList.remove('hidden');
         const reader = new FileReader();
         reader.onload = (e) => {
-            // Delay slightly to ensure browser renders the spinner before the heavy parsing freezes the thread
             setTimeout(() => {
                 parseAndRender(e.target.result);
                 loadingOverlay.classList.add('hidden');
