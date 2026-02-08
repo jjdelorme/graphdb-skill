@@ -56,6 +56,18 @@ Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
     *   *Success:* Allows the Supervisor to proceed to Git Commit.
 *   **MSBuild**: The **Specialist**. Handles running builds and tests, providing concise error reporting.
 
+## 🗄️ Neo4j Database Setup
+
+This project uses a Neo4j database containerized with Podman/Docker. A helper script is provided to launch the container with the correct APOC plugins and configuration.
+
+1.  **Launch Container:**
+    ```bash
+    bash .gemini/skills/neo4j-manager/scripts/start_neo4j_container.sh
+    ```
+    *   **User:** `neo4j`
+    *   **Password:** `password`
+    *   **UI:** [http://localhost:7474](http://localhost:7474)
+
 ## 🛠️ Build & Ingestion Workflow
 
 To analyze a codebase, you must first ingest it into the Graph Database. Run these commands from the **project root**:
