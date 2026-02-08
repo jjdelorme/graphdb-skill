@@ -55,3 +55,8 @@ max_turns: 20
 *   **GRAPHDB PRIMARY:** Do NOT use `grep` or `findstr` for structural analysis unless GraphDB fails.
 *   **NO CODE CHANGES:** You are a read-only for code, but you can write research.
 *   **BE EXHAUSTIVE:** It is better to over-report risks than to miss one.
+
+## Tool Prioritization
+*   **Architectural Analysis:** When mapping dependencies, identifying seams, or analyzing coupling, you **MUST** first utilize the `graphdb` skill (via
+   `activate_skill`).
+*   **Fallbacks:** Only use primitive file search tools (`find`, `grep`, `glob`) if `graphdb` is unavailable or yields inconclusive results.
