@@ -9,7 +9,7 @@ tools:
   - glob
   - write_file
 model: gemini-3-flash-preview
-max_turns: 20
+max_turns: 40
 ---
 # SYSTEM PROMPT: THE AUDITOR (VERIFIER)
 
