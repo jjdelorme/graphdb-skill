@@ -162,6 +162,7 @@
         
         // Stack to track agent context
         let agentStack = []; 
+        let entries = [];
 
         lines.forEach((line, idx) => {
             if (!line.trim()) return;
@@ -177,54 +178,30 @@
                 }
                 
                 // --- Agent Context Logic ---
-                // 1. Detect entering an agent/skill
-                if (entry.tool_name === 'activate_skill' && entry.tool_input && entry.tool_input.name) {
-                    // Push to stack. You might want to pop when? 
-                    // Usually 'activate_skill' is a single call that returns instructions.
-                    // But if we want to visualize "CLI -> Supervisor", we need to look for specific tool calls.
-                    // Let's stick to the user's request: "hierarchy". 
-                    // If we see a tool call, and we are inside a "session", maybe that's enough?
-                    
-                    // Actually, looking at the logs: 
-                    // CLI calls 'activate_skill'. 
-                    // The "Agent" concept is often abstract in these logs unless there's a specific 'agent_name' field.
-                    // But the user mentioned "supervisor", "auditor". These are tools in the list of available agents.
-                    // Let's treat ANY tool call that matches a known agent name as entering that agent's context.
-                    
-                    // But wait, the log shows "tool_name": "replace". 
-                    // Where is "Supervisor"?
-                    // Ah, the user said: "hierarchy... cli -> supervisor".
-                    // This implies there are tool calls named "supervisor" or "auditor".
-                    
-                    // Let's assume if tool_name is one of the "Agents", we push it.
-                }
-
-                // Simplified Hierarchy:
-                // If a tool call is made, and we haven't seen an 'AfterTool' for it, it's a parent.
-                // But this log format is flat streams of events.
-                
-                // Let's try to infer "Agent" from the tool_name if it looks like an agent.
                 const potentialAgents = ['architect', 'auditor', 'engineer', 'msbuild', 'scout', 'supervisor', 'codebase_investigator'];
                 
                 if (entry.hook_event_name === 'BeforeTool' && potentialAgents.includes(entry.tool_name)) {
                      agentStack.push(entry.tool_name);
                 }
                 
-                // Capture current stack in the entry for rendering
                 entry.agentContext = agentStack.length > 0 ? agentStack[agentStack.length - 1] : 'CLI';
-                entry.stackDepth = agentStack.length;
+                entry.stackDepth = Math.max(0, agentStack.length - (entry.hook_event_name === 'BeforeTool' && potentialAgents.includes(entry.tool_name) ? 1 : 0));
 
                 if (entry.hook_event_name === 'AfterTool' && potentialAgents.includes(entry.tool_name)) {
-                     // Pop *after* assigning context so the closing tag belongs to the agent
                      agentStack.pop();
                 }
 
-                renderEntry(entry);
+                entries.push(entry);
                 count++;
             } catch (e) {
                 console.error("Parse error line", idx, e);
             }
         });
+
+        // Render in reverse (Newest first)
+        for (let i = entries.length - 1; i >= 0; i--) {
+            renderEntry(entries[i]);
+        }
 
         // UI Updates
         dropZone.style.display = 'none';
