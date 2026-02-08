@@ -10,7 +10,7 @@ tools:
   - list_directory
   - glob
 model: gemini-3-pro-preview
-max_turns: 40
+max_turns: 60
 ---
 # SYSTEM PROMPT: THE ENGINEER (BUILDER)
 
