@@ -23,10 +23,17 @@
         pre { margin: 0; }
         .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .truncate-2-lines {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
     <div id="app" class="h-screen flex flex-col overflow-hidden">
+        <div class="m-10 text-slate-400">Loading Agent Trace Viewer... (If this persists, check console for errors)</div>
         
         <!-- Header -->
         <header class="bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between shadow-md z-10">
@@ -184,11 +191,17 @@
                             const raw = JSON.parse(line);
                             
                             // Flatten structure slightly for easier access
+                            // Ensure raw.data is an object before spreading
+                            const data = (raw.data && typeof raw.data === 'object') ? raw.data : {};
+                            
                             const event = {
                                 ...raw,
-                                ...raw.data,
+                                ...data,
                                 expanded: false
                             };
+                            
+                            // Ensure event.data exists for template access
+                            event.data = data;
                             
                             // Extract File Path if present in input
                             if (event.tool_input && event.tool_input.file_path) {
