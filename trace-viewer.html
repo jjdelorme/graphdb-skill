@@ -132,8 +132,11 @@
 
 <header>
     <h1>Agent Trace Viewer (Offline)</h1>
-    <div>
-        <span id="stats" style="margin-right: 1rem; font-size: 0.9rem; color: var(--text-muted);"></span>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <select id="session-select" style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); padding: 0.5rem; border-radius: 0.25rem; display: none;">
+            <option value="all">All Sessions</option>
+        </select>
+        <span id="stats" style="font-size: 0.9rem; color: var(--text-muted);"></span>
         <label class="btn">
             Load Log File
             <input type="file" id="file-input" accept=".jsonl,.json,.txt">
@@ -154,28 +157,31 @@
     const fileInput = document.getElementById('file-input');
     const container = document.getElementById('timeline-container');
     const stats = document.getElementById('stats');
+    const sessionSelect = document.getElementById('session-select');
+    
+    let allEntries = [];
 
     function parseAndRender(content) {
         container.innerHTML = '';
         const lines = content.trim().split('\n');
-        let count = 0;
         
-        // Stack to track agent context
         let agentStack = []; 
         let entries = [];
+        let sessions = new Set();
 
         lines.forEach((line, idx) => {
             if (!line.trim()) return;
             try {
                 const raw = JSON.parse(line);
-                // Handle structure
                 const data = (raw.data && typeof raw.data === 'object') ? raw.data : {};
                 const entry = { ...raw, ...data };
                 
-                // Fix path location
                 if (entry.tool_input && entry.tool_input.file_path) {
                     entry.file_path = entry.tool_input.file_path;
                 }
+                
+                // Track Sessions
+                if (entry.session_id) sessions.add(entry.session_id);
                 
                 // --- Agent Context Logic ---
                 const potentialAgents = ['architect', 'auditor', 'engineer', 'msbuild', 'scout', 'supervisor', 'codebase_investigator'];
@@ -192,27 +198,58 @@
                 }
 
                 entries.push(entry);
-                count++;
             } catch (e) {
                 console.error("Parse error line", idx, e);
             }
         });
-
-        // Render in Chronological Order (Oldest first) matches the "Tree" mental model
-        entries.forEach(entry => {
-            renderEntry(entry);
+        
+        allEntries = entries;
+        
+        // Populate Session Dropdown
+        const sessionList = Array.from(sessions);
+        sessionSelect.innerHTML = '<option value="all">All Sessions</option>';
+        sessionList.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s;
+            opt.textContent = s.substring(0, 8) + '...';
+            sessionSelect.appendChild(opt);
         });
+        
+        // Default to latest session if available
+        if (sessionList.length > 0) {
+            sessionSelect.value = sessionList[sessionList.length - 1];
+        }
+        
+        sessionSelect.style.display = 'block';
+        
+        renderFiltered();
 
         // UI Updates
         dropZone.style.display = 'none';
         container.style.display = 'block';
-        stats.textContent = `${count} events loaded`;
+    }
+    
+    function renderFiltered() {
+        container.innerHTML = '';
+        const selectedSession = sessionSelect.value;
+        let count = 0;
         
-        // Auto-scroll to bottom to see latest
+        allEntries.forEach(entry => {
+            if (selectedSession === 'all' || entry.session_id === selectedSession) {
+                renderEntry(entry);
+                count++;
+            }
+        });
+        
+        stats.textContent = `${count} events shown`;
+        
+        // Auto-scroll
         setTimeout(() => {
             container.scrollTop = container.scrollHeight;
         }, 0);
     }
+    
+    sessionSelect.addEventListener('change', renderFiltered);
 
     function renderEntry(entry) {
         const div = document.createElement('div');
