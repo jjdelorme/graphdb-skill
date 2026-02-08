@@ -3,348 +3,275 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Agent Trace Viewer</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Vue 3 -->
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <!-- Highlight.js -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
-
+    <title>Gemini Agent Trace Viewer (Offline)</title>
     <style>
-        body { background-color: #0f172a; color: #e2e8f0; }
-        .scroll-custom::-webkit-scrollbar { width: 8px; }
-        .scroll-custom::-webkit-scrollbar-track { background: #1e293b; }
-        .scroll-custom::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-        .scroll-custom::-webkit-scrollbar-thumb:hover { background: #64748b; }
-        pre { margin: 0; }
-        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-        .fade-enter-from, .fade-leave-to { opacity: 0; }
-        .truncate-2-lines {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --border: #334155;
+            --success: #22c55e;
+            --error: #ef4444;
+        }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
             overflow: hidden;
         }
+        /* Utility */
+        .hidden { display: none !important; }
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-4 { gap: 1rem; }
+        .p-4 { padding: 1rem; }
+        .m-0 { margin: 0; }
+        
+        /* Header */
+        header {
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        h1 { margin: 0; font-size: 1.25rem; color: var(--accent); }
+        
+        /* Drop Zone / Main Area */
+        #drop-zone {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            border: 2px dashed var(--border);
+            margin: 2rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            color: var(--text-muted);
+        }
+        #drop-zone.dragover {
+            border-color: var(--accent);
+            background-color: rgba(56, 189, 248, 0.1);
+        }
+        
+        /* Timeline */
+        #timeline-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: none; /* Hidden until loaded */
+        }
+        .entry {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        .entry-header {
+            padding: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        .entry-header:hover { background-color: rgba(255,255,255,0.05); }
+        .timestamp { font-family: monospace; font-size: 0.85rem; color: var(--text-muted); }
+        .tool-badge {
+            font-size: 0.75rem;
+            font-weight: bold;
+            padding: 0.15rem 0.5rem;
+            border-radius: 0.25rem;
+            text-transform: uppercase;
+            background: #334155;
+            color: #cbd5e1;
+        }
+        .tool-replace { background: #451a03; color: #fde68a; }
+        .tool-run_shell_command { background: #4a044e; color: #f0abfc; }
+        .tool-read_file { background: #172554; color: #bfdbfe; }
+        .tool-write_file { background: #064e3b; color: #a7f3d0; }
+        .status-error { color: var(--error); font-weight: bold; }
+        
+        .entry-details {
+            border-top: 1px solid var(--border);
+            padding: 1rem;
+            background: rgba(0,0,0,0.2);
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            display: none;
+        }
+        .entry.expanded .entry-details { display: block; }
+        
+        /* Inputs */
+        .btn {
+            background: var(--border);
+            border: none;
+            color: var(--text-main);
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+        .btn:hover { background: #475569; }
+        input[type="file"] { display: none; }
     </style>
 </head>
 <body>
-    <div id="app" class="h-screen flex flex-col overflow-hidden">
-        <div class="m-10 text-slate-400">Loading Agent Trace Viewer... (If this persists, check console for errors)</div>
-        
-        <!-- Header -->
-        <header class="bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between shadow-md z-10">
-            <div class="flex items-center gap-4">
-                <h1 class="text-xl font-bold text-sky-400 flex items-center gap-2">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                    Agent Trace Viewer
-                </h1>
-                
-                <!-- File Input -->
-                <div class="relative">
-                    <input type="file" @change="handleFileUpload" accept=".jsonl,.json,.txt" class="hidden" id="file-upload">
-                    <label for="file-upload" class="cursor-pointer bg-slate-700 hover:bg-slate-600 text-sm py-2 px-4 rounded border border-slate-600 transition-colors flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                        Load Log File
-                    </label>
-                </div>
 
-                <span v-if="logs.length" class="text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded">
-                    {{ logs.length }} events loaded
-                </span>
-            </div>
-
-            <!-- Global Filters -->
-            <div class="flex items-center gap-3" v-if="logs.length">
-                <label class="text-sm text-slate-400">Session:</label>
-                <select v-model="selectedSession" class="bg-slate-900 border border-slate-600 text-sm rounded px-2 py-1 focus:ring-2 focus:ring-sky-500 outline-none max-w-[200px]">
-                    <option value="all">All Sessions</option>
-                    <option v-for="s in sessions" :key="s" :value="s">{{ formatSession(s) }}</option>
-                </select>
-            </div>
-        </header>
-
-        <!-- Main Content -->
-        <div class="flex-1 flex overflow-hidden">
-            
-            <!-- Sidebar: Files & Stats -->
-            <aside class="w-64 bg-slate-900 border-r border-slate-700 flex flex-col" v-if="logs.length">
-                <div class="p-3 border-b border-slate-800 bg-slate-800/50 font-semibold text-xs text-slate-400 uppercase tracking-wider">
-                    Files Touched
-                </div>
-                <div class="flex-1 overflow-y-auto scroll-custom p-2 space-y-1">
-                    <button 
-                        @click="selectedFile = null"
-                        :class="['w-full text-left px-3 py-2 rounded text-sm transition-colors flex justify-between items-center', !selectedFile ? 'bg-sky-900/30 text-sky-300 border border-sky-800' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200']"
-                    >
-                        <span>All Files</span>
-                    </button>
-                    <button 
-                        v-for="(count, file) in fileStats" 
-                        :key="file"
-                        @click="selectedFile = file"
-                        :class="['w-full text-left px-3 py-2 rounded text-sm transition-colors flex justify-between items-center group', selectedFile === file ? 'bg-sky-900/30 text-sky-300 border border-sky-800' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200']"
-                    >
-                        <span class="truncate pr-2" :title="file">{{ getFileName(file) }}</span>
-                        <span class="text-xs bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 group-hover:text-slate-300">{{ count }}</span>
-                    </button>
-                </div>
-            </aside>
-
-            <!-- Timeline -->
-            <main class="flex-1 overflow-y-auto scroll-custom bg-slate-900/50 p-6 relative">
-                
-                <!-- Empty State -->
-                <div v-if="!logs.length" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
-                    <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                    <p class="text-lg">Drop your <code class="bg-slate-800 px-1 py-0.5 rounded text-sky-400">execution-trace.jsonl</code> here</p>
-                    <p class="text-sm mt-2 opacity-60">or click "Load Log File" above</p>
-                </div>
-
-                <!-- Log Stream -->
-                <div v-else class="max-w-4xl mx-auto space-y-4">
-                    
-                    <div v-for="(entry, index) in filteredLogs" :key="index" class="relative pl-8 pb-4 border-l-2 border-slate-700 last:border-0 last:pb-0">
-                        <!-- Timeline Dot -->
-                        <div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-slate-900" :class="getStatusColor(entry)"></div>
-                        
-                        <!-- Card -->
-                        <div class="bg-slate-800 rounded-lg border border-slate-700 shadow-sm overflow-hidden transition-all hover:border-slate-600">
-                            
-                            <!-- Card Header -->
-                            <div @click="entry.expanded = !entry.expanded" class="p-3 cursor-pointer flex items-start gap-3 hover:bg-slate-700/30 transition-colors">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="text-xs font-mono text-slate-500">{{ formatTime(entry.timestamp) }}</span>
-                                        <span class="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide" :class="getBadgeColor(entry.tool_name)">{{ entry.tool_name || entry.hook_event_name }}</span>
-                                        <span v-if="entry.data.file_path" class="text-xs text-sky-400 bg-sky-900/20 px-2 py-0.5 rounded border border-sky-900/30 truncate max-w-[200px]" :title="entry.data.file_path">
-                                            {{ getFileName(entry.data.file_path) }}
-                                        </span>
-                                    </div>
-                                    <p class="text-sm text-slate-300 font-mono leading-relaxed truncate-2-lines">
-                                        {{ getSummary(entry) }}
-                                    </p>
-                                </div>
-                                <div class="text-slate-500">
-                                    <svg class="w-5 h-5 transform transition-transform" :class="{'rotate-180': entry.expanded}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                </div>
-                            </div>
-
-                            <!-- Detailed View (Expanded) -->
-                            <div v-if="entry.expanded" class="border-t border-slate-700 bg-slate-900/50 p-4 font-mono text-xs">
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <!-- Input -->
-                                    <div>
-                                        <div class="text-slate-500 mb-2 uppercase tracking-wider font-semibold">Input</div>
-                                        <div class="bg-slate-950 rounded p-2 overflow-x-auto border border-slate-800">
-                                            <pre><code class="language-json" v-html="highlight(entry.tool_input || entry.data)"></code></pre>
-                                        </div>
-                                    </div>
-
-                                    <!-- Output -->
-                                    <div v-if="entry.tool_response || entry.error">
-                                        <div class="text-slate-500 mb-2 uppercase tracking-wider font-semibold flex justify-between">
-                                            <span>Result</span>
-                                            <span v-if="entry.error" class="text-red-400">ERROR</span>
-                                        </div>
-                                        <div class="bg-slate-950 rounded p-2 overflow-x-auto border border-slate-800">
-                                            <pre><code class="language-json" v-html="highlight(entry.tool_response || {error: entry.error})"></code></pre>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Full Raw Data Toggle -->
-                                <div class="mt-4 pt-4 border-t border-slate-800 text-right">
-                                     <button @click.stop="console.log(entry)" class="text-xs text-slate-500 hover:text-sky-400 underline">Log raw entry to Console</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </main>
-        </div>
+<header>
+    <h1>Agent Trace Viewer (Offline)</h1>
+    <div>
+        <span id="stats" style="margin-right: 1rem; font-size: 0.9rem; color: var(--text-muted);"></span>
+        <label class="btn">
+            Load Log File
+            <input type="file" id="file-input" accept=".jsonl,.json,.txt">
+        </label>
     </div>
+</header>
 
-    <script>
-        const { createApp, ref, computed, onMounted } = Vue;
+<div id="drop-zone">
+    <p>Drag & Drop <code>.gemini/execution-trace.jsonl</code> here</p>
+    <p style="font-size: 0.9rem; opacity: 0.7;">(or click Load Log File)</p>
+</div>
 
-        createApp({
-            setup() {
-                const logs = ref([]);
-                const sessions = ref([]);
-                const selectedSession = ref('all');
-                const selectedFile = ref(null);
+<div id="timeline-container"></div>
 
-                // --- Parsing Logic ---
-                const parseJSONL = (content) => {
-                    const lines = content.trim().split('\n');
-                    const parsed = [];
-                    const sessionSet = new Set();
-                    
-                    lines.forEach(line => {
-                        try {
-                            if (!line.trim()) return;
-                            const raw = JSON.parse(line);
-                            
-                            // Flatten structure slightly for easier access
-                            // Ensure raw.data is an object before spreading
-                            const data = (raw.data && typeof raw.data === 'object') ? raw.data : {};
-                            
-                            const event = {
-                                ...raw,
-                                ...data,
-                                expanded: false
-                            };
-                            
-                            // Ensure event.data exists for template access
-                            event.data = data;
-                            
-                            // Extract File Path if present in input
-                            if (event.tool_input && event.tool_input.file_path) {
-                                event.data.file_path = event.tool_input.file_path;
-                            }
-                            
-                            // Determine session
-                            if (event.session_id) sessionSet.add(event.session_id);
-                            
-                            parsed.push(event);
-                        } catch (e) {
-                            console.warn("Failed to parse line:", line);
-                        }
-                    });
+<script>
+    // --- Logic ---
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const container = document.getElementById('timeline-container');
+    const stats = document.getElementById('stats');
 
-                    // Reverse to show newest first, or keep chronological? 
-                    // Chronological (oldest top) is usually better for reading flows.
-                    logs.value = parsed;
-                    sessions.value = Array.from(sessionSet);
-                    // Default to latest session
-                    if (sessions.value.length > 0) {
-                        selectedSession.value = sessions.value[sessions.value.length - 1];
-                    }
-                };
+    function parseAndRender(content) {
+        container.innerHTML = '';
+        const lines = content.trim().split('\n');
+        let count = 0;
 
-                const handleFileUpload = (event) => {
-                    const file = event.target.files[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (e) => parseJSONL(e.target.result);
-                    reader.readAsText(file);
-                };
+        lines.forEach((line, idx) => {
+            if (!line.trim()) return;
+            try {
+                const raw = JSON.parse(line);
+                // Handle structure
+                const data = (raw.data && typeof raw.data === 'object') ? raw.data : {};
+                const entry = { ...raw, ...data };
+                
+                // Fix path location
+                if (entry.tool_input && entry.tool_input.file_path) {
+                    entry.file_path = entry.tool_input.file_path;
+                }
 
-                // Setup Drag & Drop
-                onMounted(() => {
-                    const dropZone = document.body;
-                    dropZone.addEventListener('dragover', (e) => e.preventDefault());
-                    dropZone.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        if (e.dataTransfer.files.length) {
-                            const file = e.dataTransfer.files[0];
-                            const reader = new FileReader();
-                            reader.onload = (ev) => parseJSONL(ev.target.result);
-                            reader.readAsText(file);
-                        }
-                    });
-                });
-
-                // --- Computed Stats ---
-                const fileStats = computed(() => {
-                    const stats = {};
-                    logs.value.forEach(log => {
-                        const path = log.data?.file_path || log.tool_input?.file_path;
-                        if (path) {
-                            stats[path] = (stats[path] || 0) + 1;
-                        }
-                    });
-                    return stats;
-                });
-
-                const filteredLogs = computed(() => {
-                    return logs.value.filter(log => {
-                        const matchSession = selectedSession.value === 'all' || log.session_id === selectedSession.value;
-                        const path = log.data?.file_path || log.tool_input?.file_path;
-                        const matchFile = !selectedFile.value || path === selectedFile.value;
-                        return matchSession && matchFile;
-                    });
-                });
-
-                // --- Helpers ---
-                const formatTime = (iso) => {
-                    if (!iso) return '--:--:--';
-                    return new Date(iso).toLocaleTimeString('en-US', { hour12: false });
-                };
-
-                const formatSession = (id) => {
-                    return id ? id.substring(0, 8) + '...' : 'Unknown';
-                };
-
-                const getFileName = (path) => {
-                    if (!path) return '';
-                    return path.split(/[\/]/).pop();
-                };
-
-                const getSummary = (entry) => {
-                    if (entry.tool_name === 'replace') {
-                        return entry.tool_input.instruction || "Replace text in file";
-                    }
-                    if (entry.tool_name === 'run_shell_command') {
-                        return entry.tool_input.command;
-                    }
-                    if (entry.tool_name === 'write_file') {
-                        return `Write ${entry.tool_input.content.length} bytes`;
-                    }
-                    if (entry.tool_name === 'read_file') {
-                        return `Read file`;
-                    }
-                    if (entry.error) {
-                        return entry.error;
-                    }
-                    return JSON.stringify(entry.tool_input).substring(0, 80);
-                };
-
-                const getStatusColor = (entry) => {
-                    if (entry.error || entry.event === 'ERROR') return 'bg-red-500';
-                    if (entry.hook_event_name === 'AfterTool') return 'bg-green-500';
-                    return 'bg-slate-500'; // BeforeTool or Info
-                };
-
-                const getBadgeColor = (tool) => {
-                    const map = {
-                        'replace': 'bg-amber-900 text-amber-200',
-                        'run_shell_command': 'bg-fuchsia-900 text-fuchsia-200',
-                        'read_file': 'bg-blue-900 text-blue-200',
-                        'write_file': 'bg-emerald-900 text-emerald-200'
-                    };
-                    return map[tool] || 'bg-slate-700 text-slate-300';
-                };
-
-                const highlight = (obj) => {
-                    if (!obj) return '';
-                    const str = JSON.stringify(obj, null, 2);
-                    return hljs.highlight(str, { language: 'json' }).value;
-                };
-
-                return {
-                    logs,
-                    sessions,
-                    selectedSession,
-                    selectedFile,
-                    fileStats,
-                    filteredLogs,
-                    handleFileUpload,
-                    formatTime,
-                    formatSession,
-                    getFileName,
-                    getSummary,
-                    getStatusColor,
-                    getBadgeColor,
-                    highlight
-                };
+                renderEntry(entry);
+                count++;
+            } catch (e) {
+                console.error("Parse error line", idx, e);
             }
-        }).mount('#app');
-    </script>
+        });
+
+        // UI Updates
+        dropZone.style.display = 'none';
+        container.style.display = 'block';
+        stats.textContent = `${count} events loaded`;
+    }
+
+    function renderEntry(entry) {
+        const div = document.createElement('div');
+        div.className = 'entry';
+        
+        const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '--:--:--';
+        const toolName = entry.tool_name || entry.hook_event_name || 'unknown';
+        const isError = entry.error || entry.event === 'ERROR';
+        
+        let summary = '';
+        if (entry.tool_input) {
+            if (entry.tool_input.command) summary = `$ ${entry.tool_input.command}`;
+            else if (entry.tool_input.instruction) summary = `Replace: ${entry.tool_input.instruction}`;
+            else summary = JSON.stringify(entry.tool_input).substring(0, 80);
+        } else if (entry.data) {
+             summary = JSON.stringify(entry.data).substring(0, 80);
+        }
+
+        const badgeClass = `tool-${toolName}`;
+
+        div.innerHTML = `
+            <div class="entry-header">
+                <span class="timestamp">${timestamp}</span>
+                <span class="tool-badge ${badgeClass}">${toolName}</span>
+                <span style="flex:1; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(summary)}</span>
+                ${isError ? '<span class="status-error">ERROR</span>' : ''}
+            </div>
+            <div class="entry-details">
+                <div style="color: var(--text-muted); margin-bottom: 0.5rem;">Input / Data:</div>
+                <div>${escapeHtml(JSON.stringify(entry.tool_input || entry.data || {}, null, 2))}</div>
+                
+                ${entry.tool_response ? `
+                    <div style="color: var(--text-muted); margin-top: 1rem; margin-bottom: 0.5rem;">Response:</div>
+                    <div>${escapeHtml(JSON.stringify(entry.tool_response, null, 2))}</div>
+                ` : ''}
+            </div>
+        `;
+
+        // Toggle
+        div.querySelector('.entry-header').addEventListener('click', () => {
+            div.classList.toggle('expanded');
+        });
+
+        container.appendChild(div);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // --- Events ---
+    
+    // File Input
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) readFile(file);
+    });
+
+    // Drag & Drop
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+    });
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+            readFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    function readFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => parseAndRender(e.target.result);
+        reader.readAsText(file);
+    }
+</script>
+
 </body>
 </html>
