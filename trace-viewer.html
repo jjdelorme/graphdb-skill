@@ -138,9 +138,34 @@
             display: none; /* Hidden until loaded */
         }
         #search-input::placeholder { color: var(--text-muted); }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
+
+<div id="loading-overlay" class="hidden">
+    <div class="spinner"></div>
+    <div style="margin-top: 1rem; font-weight: bold;">Loading Trace Data...</div>
+</div>
 
 <header>
     <h1>Agent Trace Viewer (Offline)</h1>
@@ -172,6 +197,7 @@
     const stats = document.getElementById('stats');
     const sessionSelect = document.getElementById('session-select');
     const searchInput = document.getElementById('search-input');
+    const loadingOverlay = document.getElementById('loading-overlay');
     
     let allEntries = [];
 
@@ -381,8 +407,15 @@
     });
 
     function readFile(file) {
+        loadingOverlay.classList.remove('hidden');
         const reader = new FileReader();
-        reader.onload = (e) => parseAndRender(e.target.result);
+        reader.onload = (e) => {
+            // Delay slightly to ensure browser renders the spinner before the heavy parsing freezes the thread
+            setTimeout(() => {
+                parseAndRender(e.target.result);
+                loadingOverlay.classList.add('hidden');
+            }, 50);
+        };
         reader.readAsText(file);
     }
 </script>
