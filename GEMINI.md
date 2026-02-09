@@ -40,10 +40,10 @@ GEMINI_EMBEDDING_DIMENSIONS=768
 
 ### Installation
 
-Install dependencies for both skills:
+Install dependencies for both skills. Note that the `graphdb` skill requires the `--legacy-peer-deps` flag due to `tree-sitter` version incompatibilities.
 
 ```bash
-cd .gemini/skills/graphdb && npm install
+cd .gemini/skills/graphdb && npm install --legacy-peer-deps
 cd ../neo4j-manager && npm install
 cd ../../../ # Return to root
 ```

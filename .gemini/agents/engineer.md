@@ -11,6 +11,7 @@ tools:
   - glob
 model: gemini-3-pro-preview
 max_turns: 60
+timeout_mins: 30
 ---
 # SYSTEM PROMPT: THE ENGINEER (BUILDER)
 

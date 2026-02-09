@@ -56,6 +56,18 @@ Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
     *   *Success:* Allows the Supervisor to proceed to Git Commit.
 *   **MSBuild**: The **Specialist**. Handles running builds and tests, providing concise error reporting.
 
+## 🚀 Getting Started
+
+### Installation
+
+Install dependencies for both skills. Note that the `graphdb` skill requires the `--legacy-peer-deps` flag due to `tree-sitter` version incompatibilities.
+
+```bash
+cd .gemini/skills/graphdb && npm install --legacy-peer-deps
+cd ../neo4j-manager && npm install
+cd ../../../ # Return to root
+```
+
 ## 🗄️ Neo4j Database Setup
 
 This project uses a Neo4j database containerized with Podman/Docker. A helper script is provided to launch the container with the correct APOC plugins and configuration.

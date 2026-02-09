@@ -342,14 +342,46 @@
                                 summary: thought.subject || 'Reasoning',
                                 details: { description: thought.description },
                                 agent: 'Gemini',
-                                depth: 1 // Indent thoughts slightly
+                                depth: 1 
                             }));
                         });
                     }
 
-                    // 2b. Tool Calls (if present in this format, or implied)
-                    // Note: Current session format might not explicitly list tool calls as separate items 
-                    // unless they are structured in a specific way. We'll map the main content.
+                    // 2b. Tool Calls
+                    if (msg.toolCalls && Array.isArray(msg.toolCalls)) {
+                        msg.toolCalls.forEach(tc => {
+                            // Tool Call (Input)
+                            entries.push(new LogEntry({
+                                timestamp: tc.timestamp || baseTime,
+                                type: 'tool',
+                                category: tc.name,
+                                summary: this._getToolSummary(tc.name, tc.args),
+                                details: tc.args,
+                                agent: 'Gemini',
+                                depth: 1
+                            }));
+
+                            // Tool Result (Output)
+                            if (tc.result && Array.isArray(tc.result)) {
+                                tc.result.forEach(res => {
+                                    // Handle both success and error responses
+                                    const responseData = res.functionResponse ? res.functionResponse.response : res;
+                                    const isError = res.status === 'error' || (responseData && responseData.error);
+                                    
+                                    entries.push(new LogEntry({
+                                        timestamp: tc.timestamp || baseTime, // Usually share same timestamp in this format
+                                        type: 'tool_result',
+                                        category: isError ? 'ERROR' : 'RESULT',
+                                        summary: isError ? 'Tool Failed' : 'Tool Finished',
+                                        details: responseData,
+                                        agent: 'System',
+                                        depth: 2,
+                                        isError: isError
+                                    }));
+                                });
+                            }
+                        });
+                    }
 
                     // 2c. Main Content
                     if (msg.content) {
@@ -370,6 +402,14 @@
             });
             
             return entries;
+        }
+
+        _getToolSummary(name, args) {
+            if (name === 'run_shell_command' && args.command) return `$ ${args.command}`;
+            if (name === 'replace' && args.instruction) return `Replace: ${args.instruction}`;
+            if (name === 'read_file' && args.file_path) return `Read: ${args.file_path}`;
+            if (name === 'write_file' && args.file_path) return `Write: ${args.file_path}`;
+            return JSON.stringify(args).substring(0, 100);
         }
     }
 
