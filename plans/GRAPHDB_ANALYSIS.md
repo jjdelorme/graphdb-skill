@@ -32,6 +32,40 @@ The primary difference is a transition from an **in-memory, stateful processing 
 
 ## 💡 Summary Recommendation
 
+
+
 The **`alpine/VIEW` version is architecturally superior for large-scale enterprise repositories** due to its streaming nature and deterministic ID system. It solves the "Out of Memory" issues inherent in the current design.
 
+
+
 However, if the project requires **TypeScript or VB.NET** support, the current version must be maintained or the adapters must be ported into the new streaming architecture.
+
+
+
+## 5. 2026-02-09 Update: Hybrid Migration Strategy
+
+
+
+Following a re-review of the latest local changes vs `alpine/VIEW`, a **Hybrid Migration Plan** has been adopted.
+
+
+
+**Goal:** Combine the **Streaming/Stateless Architecture** of `alpine` with the **Extended Language Support** (TS, VB.NET) and **Modern Dependencies** of the local environment.
+
+
+
+**Key Decisions:**
+
+1.  **Adopt Stateless Builder:** Port `GraphBuilder.js` to use MD5 deterministic IDs and stream JSONL output immediately (replacing in-memory arrays).
+
+2.  **Adopt Streaming Import:** Refactor `import_to_neo4j.js` to use `readline` and database-side `MERGE` for deduplication.
+
+3.  **Preserve Languages:** Explicitly keep `TsAdapter` and `VbAdapter` in the configuration, unlike the `alpine` reference which removed them.
+
+4.  **Keep Modern Deps:** Retain `tree-sitter ^0.22.4` (Local) instead of downgrading to `^0.21.1` (Alpine), handling any compatibility issues if they arise.
+
+5.  **New Tooling:** Import the robust helper scripts (`manage_embeddings.js`, `orchestrate.js`) from `alpine`.
+
+
+
+A detailed execution plan has been created at: **`plans/stateless_migration_plan.md`**.
