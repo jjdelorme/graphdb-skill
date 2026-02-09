@@ -20,48 +20,61 @@ const CS_WASM_PATH = path.join(__dirname, 'node_modules/tree-sitter-c-sharp/tree
 
 async function main() {
     // 1. Load File List
-    console.log("Loading compilation database...");
-    const uniqueFiles = new Set();
-    
-    // 1a. C++ Files from compile_commands.json
-    if (fs.existsSync(COMPILE_DB_PATH)) {
-        const compileCmds = JSON.parse(fs.readFileSync(COMPILE_DB_PATH, 'utf8'));
-        compileCmds.forEach(entry => {
-            let filePath = entry.file;
-            if (!path.isAbsolute(filePath)) filePath = path.join(entry.directory, entry.file);
-            
-            uniqueFiles.add(path.resolve(filePath));
-        });
+    let fileList = [];
+    const args = process.argv.slice(2);
+    const fileListArgIndex = args.indexOf('--file-list');
+
+    if (fileListArgIndex !== -1 && args[fileListArgIndex + 1]) {
+        // Surgical Update Mode
+        const listPath = args[fileListArgIndex + 1];
+        console.log(`Using file list from: ${listPath}`);
+        if (fs.existsSync(listPath)) {
+            fileList = fs.readFileSync(listPath, 'utf8')
+                .split('\n')
+                .map(l => l.trim())
+                .filter(l => l && !l.startsWith('#'))
+                .map(l => path.resolve(ROOT_DIR, l));
+        } else {
+            console.error(`File list not found: ${listPath}`);
+            process.exit(1);
+        }
     } else {
-        console.warn(`Warning: Compilation database not found at ${COMPILE_DB_PATH}`);
+        // Full Scan Mode
+        console.log("Loading compilation database...");
+        const uniqueFiles = new Set();
+        
+        // 1a. C++ Files from compile_commands.json
+        if (fs.existsSync(COMPILE_DB_PATH)) {
+            const compileCmds = JSON.parse(fs.readFileSync(COMPILE_DB_PATH, 'utf8'));
+            compileCmds.forEach(entry => {
+                let filePath = entry.file;
+                if (!path.isAbsolute(filePath)) filePath = path.join(entry.directory, entry.file);
+                
+                uniqueFiles.add(path.resolve(filePath));
+            });
+        } else {
+            console.warn(`Warning: Compilation database not found at ${COMPILE_DB_PATH}`);
+        }
+
+        // 1b. Other Files from glob
+        console.log("Scanning for source files (CS, VB, ASP, SQL, CPP)...");
+        const extensions = 'c,cc,cpp,cxx,h,hh,hpp,hxx,inl,cs,vb,asp,aspx,cshtml,razor,sql,ts,tsx';
+        
+        const files = glob.sync(`**/*.{${extensions}}`, { 
+            cwd: ROOT_DIR, 
+            absolute: true, 
+            ignore: [
+                '**/obj/**', '**/bin/**', '**/node_modules/**', 
+                '**/Debug/**', '**/Release/**', '**/.git/**',
+                '**/.gemini/**'
+            ] 
+        });
+        console.log(`Found ${files.length} source files via scanning.`);
+        files.forEach(f => uniqueFiles.add(f));
+
+        fileList = Array.from(uniqueFiles);
     }
-
-    // 1b. Other Files from glob
-    // Including C#, VB.NET, ASP.NET, SQL, and C++ headers/sources not in compile_commands.json
-    console.log("Scanning for source files (CS, VB, ASP, SQL, CPP)...");
     
-    // Extensions from plans/skill-generalization.md:
-    // C/C++: .c, .cc, .cpp, .cxx, .h, .hh, .hpp, .hxx, .inl
-    // C#: .cs
-    // VB.NET: .vb
-    // Web: .asp, .aspx, .cshtml, .razor
-    // Database: .sql
-    // TypeScript: .ts, .tsx
-    const extensions = 'c,cc,cpp,cxx,h,hh,hpp,hxx,inl,cs,vb,asp,aspx,cshtml,razor,sql,ts,tsx';
-    
-    const files = glob.sync(`**/*.{${extensions}}`, { 
-        cwd: ROOT_DIR, 
-        absolute: true, 
-        ignore: [
-            '**/obj/**', '**/bin/**', '**/node_modules/**', 
-            '**/Debug/**', '**/Release/**', '**/.git/**',
-            '**/.gemini/**'
-        ] 
-    });
-    console.log(`Found ${files.length} source files via scanning.`);
-    files.forEach(f => uniqueFiles.add(f));
-
-    const fileList = Array.from(uniqueFiles);
     console.log(`Total: ${fileList.length} unique files to process.`);
 
     // 2. Setup Adapters

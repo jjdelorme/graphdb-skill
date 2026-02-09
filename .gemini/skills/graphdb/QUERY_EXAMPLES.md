@@ -41,9 +41,13 @@ node .gemini/skills/graphdb/scripts/query_graph.js co-change --file <file_path>
 ```
 
 ### 6. Impact Analysis
-Find functions that call a specific function (up to 3 levels deep).
+Find functions that call a specific function (upwards dependency).
 ```powershell
+# Default depth: 5 levels
 node .gemini/skills/graphdb/scripts/query_graph.js impact --function <function_name>
+
+# Custom depth (e.g., 10 levels)
+node .gemini/skills/graphdb/scripts/query_graph.js impact --function <function_name> --depth 10
 ```
 
 ### 7. Test Context
@@ -53,9 +57,21 @@ node .gemini/skills/graphdb/scripts/query_graph.js test-context --function <func
 ```
 
 ### 8. Global Access
-Find global variables accessed by functions in a module.
+Find global variables accessed by functions.
+
+**Module Scope (Direct Usage):**
 ```powershell
 node .gemini/skills/graphdb/scripts/query_graph.js globals --module <module_name>
+```
+
+**Function Scope (Transitive Usage - "Deep Globals"):**
+Finds all globals used by a function and its entire call tree.
+```powershell
+# Full transitive search (default)
+node .gemini/skills/graphdb/scripts/query_graph.js globals --function <function_name>
+
+# Limit depth (e.g., 3 levels down)
+node .gemini/skills/graphdb/scripts/query_graph.js globals --function <function_name> --depth 3
 ```
 
 ### 9. Service Extraction Candidates

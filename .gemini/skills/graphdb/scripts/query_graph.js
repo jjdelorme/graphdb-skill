@@ -74,6 +74,32 @@ const queries = {
         return result.records[0].toObject();
     },
     'globals': async (session, params) => {
+        // Mode 1: Function Transitive Analysis (Downstream)
+        if (params.function) {
+            const depth = params.depth ? `0..${params.depth}` : '0..';
+            const result = await session.run(`
+                MATCH (root:Function {label: $func})
+                MATCH (root)-[:CALLS*${depth}]->(descendant:Function)
+                MATCH (descendant)-[:USES_GLOBAL]->(g:Global)
+                RETURN DISTINCT g.label as global, g.file as file, collect(DISTINCT descendant.label) as used_by
+                ORDER BY global
+            `, { func: params.function });
+            
+            return result.records.map(r => {
+                const users = r.get('used_by');
+                return {
+                    global: r.get('global'),
+                    defined_in: r.get('file'),
+                    usage_count: users.length,
+                    // If the only user is the root itself, say "Direct", else show sample
+                    used_by: users.length === 1 && users[0] === params.function 
+                        ? 'Direct Usage' 
+                        : users.slice(0, 5)
+                };
+            });
+        } 
+        
+        // Mode 2: Module Analysis (Direct Usage in File)
         const module = params.module || '.*';
         const result = await session.run(`
             MATCH (f:Function)-[:DEFINED_IN]->(file:File)
@@ -119,8 +145,12 @@ const queries = {
     'impact': async (session, params) => {
         const func = params.function;
         if (!func) return { error: 'Missing function parameter' };
+        
+        // Use provided depth or default to 1..5 (more robust default than 1..3)
+        const depth = params.depth ? `1..${params.depth}` : '1..5';
+        
         const result = await session.run(`
-            MATCH (caller:Function)-[:CALLS*1..3]->(f:Function {label: $func})
+            MATCH (caller:Function)-[:CALLS*${depth}]->(f:Function {label: $func})
             RETURN DISTINCT caller.label as caller, caller.ui_contaminated as contaminated
         `, { func });
         return result.records.map(r => r.toObject());
@@ -136,11 +166,37 @@ const queries = {
             return [];
         }
 
-        const result = await session.run(`
-            MATCH (f:Function {label: $func})-[:CALLS|USES_GLOBAL]->(dep)
-            RETURN dep.label as dependency, dep.type as type, labels(dep) as labels
-        `, { func });
-        return result.records.map(r => r.toObject());
+        const depth = parseInt(params.depth || "1", 10);
+
+        const query = `
+            MATCH (f:Function {label: $func})
+            
+            // 1. Direct & Transitive Globals
+            OPTIONAL MATCH path = (f)-[:CALLS*0..${depth}]->(callee)-[:USES_GLOBAL]->(g:Global)
+            WITH f, collect(DISTINCT {
+                dependency: g.label, 
+                type: 'Global', 
+                via: [n in nodes(path) WHERE n.label <> $func | n.label]
+            }) as globals
+
+            // 2. Direct Function Calls (Always kept shallow for context mocking)
+            MATCH (f)-[:CALLS]->(d:Function)
+            WITH globals, collect(DISTINCT {dependency: d.label, type: 'Function', labels: labels(d)}) as funcs
+            
+            RETURN globals + funcs as dependencies
+        `;
+
+        const result = await session.run(query, { func });
+        
+        // Flatten output for cleaner JSON
+        const raw = result.records[0].get('dependencies');
+        return raw.map(item => {
+            if (item.type === 'Global' && item.via.length === 0) {
+                 // Direct dependency
+                 delete item.via; 
+            }
+            return item;
+        });
     },
     'hybrid-context': async (session, params) => {
         const func = params.function;
@@ -265,7 +321,8 @@ async function main() {
         .option('-m, --module <pattern>', 'Module regex pattern', '.*')
         .option('-f, --function <name>', 'Function name')
         .option('-F, --file <path>', 'File path')
-        .option('-k, --k <number>', 'Cluster count');
+        .option('-k, --k <number>', 'Cluster count')
+        .option('-d, --depth <number>', 'Traversal depth');
 
     // Argument for query type
     program

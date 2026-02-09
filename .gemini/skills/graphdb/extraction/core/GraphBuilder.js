@@ -1,51 +1,49 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 class GraphBuilder {
     constructor(config) {
         this.config = config; // { root, outputDir, adapters: { cpp: Adapter, ... } }
-        this.nodes = [];
-        this.edges = [];
-        this.nodeMap = new Map(); // "Type:Name" -> ID
-        this.nodeIdCounter = 0;
         
-        // Registry for Pass 2
+        // Ensure output directory exists
+        if (!fs.existsSync(this.config.outputDir)) {
+            fs.mkdirSync(this.config.outputDir, { recursive: true });
+        }
+
+        // Initialize Streams
+        this.nodesStream = fs.createWriteStream(path.join(this.config.outputDir, 'nodes.jsonl'));
+        this.edgesStream = fs.createWriteStream(path.join(this.config.outputDir, 'edges.jsonl'));
+
+        // Registry for Pass 2 (still needed for context, but kept minimal)
+        // Ideally this should also be offloaded or minimized, but for now we keep globals.
         this.definedGlobals = new Set();
     }
 
-    // Helper: Get or Create Node ID
+    // Helper: Generate Deterministic ID
+    _generateId(type, name) {
+        return crypto.createHash('md5').update(`${type}:${name}`).digest('hex');
+    }
+
+    // Helper: Get or Create Node ID (Stateless Emit)
     getNode(type, name, file, metadata = {}) {
-        const key = `${type}:${name}`; 
+        const id = this._generateId(type, name);
         
-        if (!this.nodeMap.has(key)) {
-            const id = `n${this.nodeIdCounter++}`;
-            const node = { id, label: name, type, ...metadata };
-            if (file) node.file = file;
-            this.nodes.push(node);
-            this.nodeMap.set(key, id);
-            return id;
-        }
+        const node = { id, label: name, type, ...metadata };
+        if (file) node.file = file;
+
+        // Emit immediately
+        this.nodesStream.write(JSON.stringify(node) + '\n');
         
-        const id = this.nodeMap.get(key);
-        // Update existing node
-        const index = parseInt(id.substring(1));
-        const existingNode = this.nodes[index];
-        
-        if (existingNode) {
-            if (file && !existingNode.file) existingNode.file = file;
-            // Merge metadata if needed (e.g. line numbers)
-            if (metadata.start_line && !existingNode.start_line) {
-                 Object.assign(existingNode, metadata);
-            }
-        }
         return id;
     }
 
     addEdge(sourceId, targetId, type) {
-        this.edges.push({ source: sourceId, target: targetId, type });
+        const edge = { source: sourceId, target: targetId, type };
+        this.edgesStream.write(JSON.stringify(edge) + '\n');
     }
 
-    async run(fileList, skipWrite = false) {
+    async run(fileList, skipWrite = false) { // skipWrite arg is deprecated but kept for signature compatibility
         console.log(`Starting Graph Build for ${fileList.length} files...`);
 
         // Initialize Adapters
@@ -59,7 +57,10 @@ class GraphBuilder {
         let processed = 0;
         for (const file of fileList) {
             processed++;
-            if (processed % 100 === 0) console.log(`[Pass 1] Processing ${processed}/${fileList.length}`);
+            if (processed % 100 === 0) {
+                console.log(`[Pass 1] Processing ${processed}/${fileList.length}`);
+                if (global.gc) global.gc(); // Force GC to keep heap low
+            }
             
             const adapter = this._getAdapterForFile(file);
             if (!adapter) continue;
@@ -91,9 +92,9 @@ class GraphBuilder {
                             const baseId = this.getNode('Class', baseName, null);
                             this.addEdge(id, baseId, 'INHERITS_FROM');
                         });
-                        // Remove intermediate metadata from the node object
-                        const nodeObj = this.nodes[parseInt(id.substring(1))];
-                        if (nodeObj && nodeObj.inherits) delete nodeObj.inherits;
+                        // Note: We emit the node with 'inherits' metadata above. 
+                        // The DB merge logic should handle cleanup if we want, 
+                        // but keeping it in metadata is harmless.
                     }
                 }
                 
@@ -118,7 +119,10 @@ class GraphBuilder {
         processed = 0;
         for (const file of fileList) {
             processed++;
-            if (processed % 100 === 0) console.log(`[Pass 2] Processing ${processed}/${fileList.length}`);
+            if (processed % 100 === 0) {
+                console.log(`[Pass 2] Processing ${processed}/${fileList.length}`);
+                if (global.gc) global.gc();
+            }
             
             const adapter = this._getAdapterForFile(file);
             if (!adapter) continue;
@@ -129,7 +133,7 @@ class GraphBuilder {
                 const references = adapter.scanReferences(tree, this.definedGlobals);
                 
                 for (const ref of references) {
-                    const sourceId = this.getNode('Function', ref.source, null); // Should exist from Pass 1
+                    const sourceId = this.getNode('Function', ref.source, null); // Re-generates ID
                     
                     if (ref.type === 'Call') {
                         const targetId = this.getNode('Function', ref.target, null);
@@ -143,6 +147,11 @@ class GraphBuilder {
                     } else if (ref.type === 'Usage') {
                         const targetId = this.getNode('Global', ref.target, null); // Should exist
                         this.addEdge(sourceId, targetId, 'USES_GLOBAL');
+                    } else if (ref.type === 'ImplicitGlobalWrite') {
+                         // New logic for implicit globals mentioned in plan
+                         // "Copy ImplicitGlobalWrite handling (emitting inferred: true nodes)"
+                         const globalId = this.getNode('Global', ref.target, null, { inferred: true });
+                         this.addEdge(sourceId, globalId, 'WRITES_TO_GLOBAL');
                     }
                 }
 
@@ -161,10 +170,12 @@ class GraphBuilder {
             }
         }
 
-        if (!skipWrite) {
-            this._writeOutput();
-        }
-        return { nodes: this.nodes, edges: this.edges };
+        // Close streams
+        this.nodesStream.end();
+        this.edgesStream.end();
+        
+        // Return dummy object for compatibility if needed, or just void
+        return { nodes: [], edges: [] }; 
     }
 
     _getAdapterForFile(filePath) {
@@ -188,16 +199,6 @@ class GraphBuilder {
             return this.config.adapters.ts;
         }
         return null;
-    }
-
-    _writeOutput() {
-        const outDir = this.config.outputDir;
-        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-        
-        console.log(`Writing ${this.nodes.length} nodes and ${this.edges.length} edges...`);
-        fs.writeFileSync(path.join(outDir, 'nodes.json'), JSON.stringify(this.nodes, null, 2));
-        fs.writeFileSync(path.join(outDir, 'edges.json'), JSON.stringify(this.edges, null, 2));
-        console.log("Done.");
     }
 }
 
