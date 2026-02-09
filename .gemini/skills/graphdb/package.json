@@ -5,6 +5,7 @@
   "main": "scripts/query_graph.js",
   "dependencies": {
     "@google/genai": "^1.39.0",
+    "commander": "^14.0.3",
     "dotenv": "^17.2.3",
     "glob": "^13.0.0",
     "ml-kmeans": "^7.0.0",

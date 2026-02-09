@@ -16,6 +16,14 @@ You will use the `query_graph.js` CLI tool to fetch data.
 
 The graph database is built in two stages: extraction and import.
 
+### Installation
+
+To set up the skill's dependencies, run the following command. The `--legacy-peer-deps` flag is **required** due to version conflicts between `tree-sitter` language packs.
+
+```bash
+cd .gemini/skills/graphdb && npm install --legacy-peer-deps
+```
+
 ### 1. Extraction
 Scans the codebase and generates intermediate JSON files (`nodes.json`, `edges.json`).
 *   **Command:** `node .gemini/skills/graphdb/extraction/extract_graph.js`

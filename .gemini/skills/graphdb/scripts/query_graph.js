@@ -1,3 +1,4 @@
+const { Command } = require('commander');
 const neo4jService = require('./Neo4jService');
 const { syncGraph } = require('./sync_graph');
 const ClusterService = require('./services/ClusterService');
@@ -252,43 +253,54 @@ const queries = {
 };
 
 async function main() {
-    // 0. Auto-Sync Check
-    await syncGraph();
+    const program = new Command();
 
-    const args = process.argv.slice(2);
-    if (args.length === 0) {
-        console.log('Usage: node query_graph.js <query-type> [--module <module>] [--function <func>] [--file <file>]');
-        console.log('Types:', Object.keys(queries).join(', '));
-        process.exit(1);
-    }
+    program
+        .name('query_graph')
+        .description('CLI to query the Neo4j graph for code analysis')
+        .version('1.0.0');
 
-    const type = args[0];
-    const params = {};
-    for (let i = 1; i < args.length; i += 2) {
-        const key = args[i].replace('--', '');
-        const value = args[i + 1];
-        params[key] = value;
-    }
+    // Global options
+    program
+        .option('-m, --module <pattern>', 'Module regex pattern', '.*')
+        .option('-f, --function <name>', 'Function name')
+        .option('-F, --file <path>', 'File path')
+        .option('-k, --k <number>', 'Cluster count');
 
-    if (!queries[type]) {
-        console.error('Unknown query type:', type);
-        process.exit(1);
-    }
+    // Argument for query type
+    program
+        .argument('<query_type>', 'Type of query to run')
+        .action(async (queryType, options) => {
+            // 0. Auto-Sync Check
+            await syncGraph();
 
-    const session = neo4jService.getSession();
-    try {
-        const result = await queries[type](session, params);
-        console.log(JSON.stringify(result, (key, value) => {
-            if (typeof value === 'bigint') return value.toString();
-            if (value && typeof value.toNumber === 'function') return value.toNumber();
-            return value;
-        }, 2));
-    } catch (error) {
-        console.error('Query Error:', error);
-    } finally {
-        await session.close();
-        await neo4jService.close();
-    }
+            if (!queries[queryType]) {
+                console.error(`Unknown query type: ${queryType}`);
+                console.error('Available queries:', Object.keys(queries).join(', '));
+                process.exit(1);
+            }
+
+            const session = neo4jService.getSession();
+            try {
+                // Merge options into params
+                const params = { ...options };
+                const result = await queries[queryType](session, params);
+                
+                console.log(JSON.stringify(result, (key, value) => {
+                    if (typeof value === 'bigint') return value.toString();
+                    if (value && typeof value.toNumber === 'function') return value.toNumber();
+                    return value;
+                }, 2));
+            } catch (error) {
+                console.error('Query Error:', error);
+                process.exit(1);
+            } finally {
+                await session.close();
+                await neo4jService.close();
+            }
+        });
+
+    program.parse(process.argv);
 }
 
 main().catch(console.error);
