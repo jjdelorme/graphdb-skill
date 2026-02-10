@@ -111,14 +111,14 @@ The current Node.js solution supports a specific set of languages. The Go versio
 2.  **Step 1.1.B (Green):** ~~Implement JSONL Emitter.~~ ✅ Implemented
     *   *Action:* Create `internal/storage/jsonl.go`. Implement the writing logic to match the existing schema: `{"id": "...", "label": "..."}`.
     *   *Verify:* Run `go test ./internal/storage/...`. Green.
-3.  **Step 1.1.C (Refactor):** Ensure thread safety.
+3.  **Step 1.1.C (Refactor):** ~~Ensure thread safety.~~ ✅ Implemented
     *   *Action:* Add `sync.Mutex` to the emitter if concurrent writes are expected. Update tests to run parallel emits.
 
 #### Phase 1.2: The Parser Engine (Generic)
-1.  **Step 1.2.A (Red):** Define the Generic Parser logic.
+1.  **Step 1.2.A (Red):** ~~Define the Generic Parser logic.~~ ✅ Implemented
     *   *Test:* Create `internal/analysis/parser_test.go`. Test a mock parser that accepts a file path and returns dummy nodes.
     *   *Assert:* Fails.
-2.  **Step 1.2.B (Green):** Implement the Parser Interface & Registry.
+2.  **Step 1.2.B (Green):** ~~Implement the Parser Interface & Registry.~~ ✅ Implemented
     *   *Action:* Create `internal/analysis/parser.go`. Define the `LanguageParser` interface and a factory method to select parsers by file extension.
     *   *Verify:* Run `go test ./internal/analysis`. Green.
 
