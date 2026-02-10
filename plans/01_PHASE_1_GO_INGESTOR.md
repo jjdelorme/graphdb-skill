@@ -5,8 +5,8 @@
 **Context:** This CLI will replace the current `.gemini/skills/graphdb/extraction` scripts. It must match the existing output format exactly to ensure seamless integration with the existing Neo4j loader.
 
 ## 📋 Todo Checklist
-- [ ] **Core:** Initialize Go project with `Storage` interface abstraction.
-- [ ] **Storage:** Implement `JSONLEmitter` (Phase 1 implementation of Storage).
+- [x] **Core:** Initialize Go project with `Storage` interface abstraction.
+- [x] **Storage:** Implement `JSONLEmitter` (Phase 1 implementation of Storage).
 - [ ] **Parity:** Implement parsers for **C#, C/C++, VB.NET, SQL, TypeScript**.
 - [ ] **Enrichment:** Integrate Vertex AI for embedding generation (Parity with `enrich_vectors.js`).
 - [ ] **TDD:** Achieve 100% unit test coverage for parser logic.
@@ -108,7 +108,7 @@ The current Node.js solution supports a specific set of languages. The Go versio
     *   *Action:* Create `internal/storage/interface.go`.
     *   *Test:* Create `internal/storage/jsonl_test.go`. Define a test that initializes a `JSONLEmitter` and calls `EmitNode`.
     *   *Assert:* Test fails to compile (missing struct) or fails to run (missing method).
-2.  **Step 1.1.B (Green):** Implement JSONL Emitter.
+2.  **Step 1.1.B (Green):** ~~Implement JSONL Emitter.~~ ✅ Implemented
     *   *Action:* Create `internal/storage/jsonl.go`. Implement the writing logic to match the existing schema: `{"id": "...", "label": "..."}`.
     *   *Verify:* Run `go test ./internal/storage/...`. Green.
 3.  **Step 1.1.C (Refactor):** Ensure thread safety.
