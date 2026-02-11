@@ -50,6 +50,16 @@ type SeamResult struct {
 	Risk float64 `json:"risk"`
 }
 
+// DomainExplorationResult represents the result of exploring a feature's
+// position in the RPG hierarchy.
+type DomainExplorationResult struct {
+	Feature  *graph.Node   `json:"feature"`
+	Parent   *graph.Node   `json:"parent,omitempty"`
+	Children []*graph.Node `json:"children,omitempty"`
+	Siblings []*graph.Node `json:"siblings,omitempty"`
+	Functions []*graph.Node `json:"functions,omitempty"`
+}
+
 // GraphProvider defines the interface for graph database operations.
 type GraphProvider interface {
 	// Lifecycle
@@ -69,4 +79,5 @@ type GraphProvider interface {
 	GetSeams(modulePattern string) ([]*SeamResult, error)
 	FetchSource(nodeID string) (string, error)
 	LocateUsage(sourceID string, targetID string) (any, error)
+	ExploreDomain(featureID string) (*DomainExplorationResult, error)
 }

@@ -16,22 +16,32 @@ type Summarizer interface {
 }
 
 type Enricher struct {
-	Client Summarizer
+	Client   Summarizer
+	Embedder embedding.Embedder
 }
 
 func (e *Enricher) Enrich(feature *Feature, functions []graph.Node) error {
 	var snippets []string
 	for _, fn := range functions {
-		// Use full content if available, but limited snippets
+		var snippet string
+
+		// Include atomic features as context if available
+		if af, ok := fn.Properties["atomic_features"].([]string); ok && len(af) > 0 {
+			snippet = "// Atomic features: " + strings.Join(af, ", ") + "\n"
+		}
+
 		if content, ok := fn.Properties["content"].(string); ok {
-			// Still truncate individual files to avoid hitting context limits too early
-			if len(content) > 1000 {
-				snippets = append(snippets, content[:1000]+"...")
+			if len(content) > 3000 {
+				snippet += content[:3000] + "..."
 			} else {
-				snippets = append(snippets, content)
+				snippet += content
 			}
 		}
-		if len(snippets) > 10 { // Limit number of snippets
+
+		if snippet != "" {
+			snippets = append(snippets, snippet)
+		}
+		if len(snippets) > 10 {
 			break
 		}
 	}
@@ -43,6 +53,18 @@ func (e *Enricher) Enrich(feature *Feature, functions []graph.Node) error {
 
 	feature.Name = name
 	feature.Description = desc
+
+	// Generate embedding from the description
+	if e.Embedder != nil && desc != "" {
+		embeddings, err := e.Embedder.EmbedBatch([]string{desc})
+		if err != nil {
+			return fmt.Errorf("embedding generation failed: %w", err)
+		}
+		if len(embeddings) > 0 {
+			feature.Embedding = embeddings[0]
+		}
+	}
+
 	return nil
 }
 

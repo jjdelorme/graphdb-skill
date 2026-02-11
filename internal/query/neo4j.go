@@ -500,4 +500,84 @@ func (p *Neo4jProvider) LocateUsage(sourceID string, targetID string) (any, erro
 	return matches, scanner.Err()
 }
 
+// ExploreDomain returns the hierarchy context for a Feature node:
+// the feature itself, its parent, children, siblings, and implementing functions.
+func (p *Neo4jProvider) ExploreDomain(featureID string) (*DomainExplorationResult, error) {
+	query := `
+		// Find the target feature
+		MATCH (f:Feature {id: $featureID})
 
+		// Optional: parent feature
+		OPTIONAL MATCH (parent:Feature)-[:PARENT_OF]->(f)
+
+		// Optional: children
+		OPTIONAL MATCH (f)-[:PARENT_OF]->(child:Feature)
+
+		// Optional: siblings (same parent, different node)
+		OPTIONAL MATCH (parent)-[:PARENT_OF]->(sibling:Feature)
+		WHERE sibling.id <> f.id
+
+		// Optional: implementing functions
+		OPTIONAL MATCH (fn:Function)-[:IMPLEMENTS]->(f)
+
+		RETURN properties(f) as feature, f.id as fid,
+		       properties(parent) as parent, parent.id as pid,
+		       collect(DISTINCT {id: child.id, props: properties(child)}) as children,
+		       collect(DISTINCT {id: sibling.id, props: properties(sibling)}) as siblings,
+		       collect(DISTINCT {id: fn.id, props: properties(fn)}) as functions
+	`
+
+	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
+		"featureID": featureID,
+	}, neo4j.EagerResultTransformer)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute ExploreDomain query: %w", err)
+	}
+
+	if len(result.Records) == 0 {
+		return nil, fmt.Errorf("feature not found: %s", featureID)
+	}
+
+	record := result.Records[0]
+
+	// Build feature node
+	fid, _, _ := neo4j.GetRecordValue[string](record, "fid")
+	featureProps, _, _ := neo4j.GetRecordValue[map[string]any](record, "feature")
+	featureNode := &graph.Node{ID: fid, Label: "Feature", Properties: featureProps}
+
+	// Build parent node
+	var parentNode *graph.Node
+	pid, _, _ := neo4j.GetRecordValue[string](record, "pid")
+	if pid != "" {
+		parentProps, _, _ := neo4j.GetRecordValue[map[string]any](record, "parent")
+		parentNode = &graph.Node{ID: pid, Label: "Feature", Properties: parentProps}
+	}
+
+	// Helper to extract node list from collected results
+	extractNodes := func(key string, label string) []*graph.Node {
+		raw, _, _ := neo4j.GetRecordValue[[]any](record, key)
+		var nodes []*graph.Node
+		for _, item := range raw {
+			m, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			id, _ := m["id"].(string)
+			if id == "" {
+				continue
+			}
+			props, _ := m["props"].(map[string]any)
+			nodes = append(nodes, &graph.Node{ID: id, Label: label, Properties: props})
+		}
+		return nodes
+	}
+
+	return &DomainExplorationResult{
+		Feature:   featureNode,
+		Parent:    parentNode,
+		Children:  extractNodes("children", "Feature"),
+		Siblings:  extractNodes("siblings", "Feature"),
+		Functions: extractNodes("functions", "Function"),
+	}, nil
+}

@@ -9,6 +9,9 @@ type Feature struct {
 	Embedding   []float32
 	ScopePath   string
 	Children    []*Feature
+	// MemberFunctions holds the functions belonging to this feature.
+	// Not serialized to the graph -- used during enrichment only.
+	MemberFunctions []graph.Node `json:"-"`
 }
 
 func (f *Feature) ToNode() graph.Node {
