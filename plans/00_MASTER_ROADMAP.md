@@ -47,12 +47,12 @@
 
 ### Campaign 4: The Go Import Loader (Dependency Removal)
 **Goal:** Port the Neo4j bulk loading logic (`import_to_neo4j.js`) to Go, eliminating the Node.js runtime dependency for standard workflows.
-**Status:** Active
+**Status:** Completed
 **Key Deliverables:**
-- [ ] New package `internal/loader` for batch processing JSONL.
-- [ ] `import` CLI command in `cmd/graphdb`.
-- [ ] **Parity:** Support for `-clean`, `-incremental`, and `GraphState` commit tracking.
-- [ ] **Optimization:** Efficient batching using `UNWIND` cypher queries.
+- [x] New package `internal/loader` for batch processing JSONL.
+- [x] `import` CLI command in `cmd/graphdb`.
+- [x] **Parity:** Support for `-clean`, `-incremental`, and `GraphState` commit tracking.
+- [x] **Optimization:** Efficient batching using `UNWIND` cypher queries.
 
 ### Campaign 4.5: Gemini CLI Skill Integration (The Agent Bridge)
 **Goal:** Wrap the Go Binary in a Gemini CLI Skill to allow agents to invoke it directly for **both ingestion and querying**.
