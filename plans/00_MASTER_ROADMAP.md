@@ -36,14 +36,26 @@
 - [x] **Search Capability:** `search-features` query type.
 
 ### Campaign 3.5: RPG Realization (From Prototype to Production)
-**Goal:** Replace the RPG placeholders (Campaign 3 skeleton) with fully functional logic for Domain Discovery, Clustering, Persistence, and LLM Integration.
+**Goal:** Replace the RPG placeholders (Campaign 3 skeleton) with functional logic for Domain Discovery, Clustering, Persistence, and LLM Integration. (Note: Clustering was file-based, not semantic. See Campaign 3.6 for remediation.)
 **Status:** Completed
 **Key Deliverables:**
 - [x] **Real Domain Discovery:** Replace `SimpleDomainDiscoverer` with directory/heuristic-based logic.
-- [x] **Semantic Clustering:** Replace `SimpleClusterer` with embedding-based or structural clustering to group functions into Features.
+- [x] **File-Based Clustering:** Replace `SimpleClusterer` with `FileClusterer` (structural grouping by filename).
 - [x] **Persistence Wiring:** Ensure `enrich-features` emits `IMPLEMENTS` edges and `Feature` nodes to storage (Neo4j/JSONL).
 - [x] **LLM Integration:** Connect `Summarizer` to real Vertex AI client for generation.
 - [x] **E2E Verification:** Verify a real graph is built and queryable.
+
+### Campaign 3.6: RPG Remediation (Semantic Pipeline)
+**Goal:** Fix structural bugs and implement the core RPG pipeline per the research papers (RPG.pdf, RPG-Encoder.pdf): per-function atomic feature extraction, embedding-based semantic clustering, and hierarchy navigation. Gap analysis documented in `plans/rpg_gap_analysis_and_remediation.md`.
+**Status:** Completed
+**Key Deliverables:**
+- [x] **Bug Fixes:** Corrected `IMPLEMENTS` edge direction (Function -> Feature), fixed enrichment to cover all features with domain-scoped functions, populated `ScopePath` on child features, removed dead code.
+- [x] **Feature Embeddings:** `Enricher` now generates embeddings for all Feature nodes via `Embedder` integration.
+- [x] **Atomic Feature Extraction:** New `FeatureExtractor` interface and `LLMFeatureExtractor` -- extracts Verb-Object descriptors per function (e.g., "validate email", "hash password").
+- [x] **Semantic Clustering:** New `EmbeddingClusterer` with K-Means++ on atomic feature embeddings, replacing file-based grouping. Available via `--cluster-mode=semantic` flag.
+- [x] **3-Level Hierarchy:** `Builder` supports optional `CategoryClusterer` for Domain -> Category -> Feature hierarchy (per research).
+- [x] **Enrichment Improvements:** Increased truncation to 3000 chars, atomic features included as summarization context.
+- [x] **Hierarchy Navigation:** New `ExploreDomain` query returns feature + parent + children + siblings + implementing functions. Wired to `--type explore-domain` CLI.
 
 ### Campaign 4: The Go Import Loader (Dependency Removal)
 **Goal:** Port the Neo4j bulk loading logic (`import_to_neo4j.js`) to Go, eliminating the Node.js runtime dependency for standard workflows.
