@@ -2,6 +2,9 @@ package config
 
 import (
 	"os"
+	"path/filepath"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds the configuration for the graph database connection.
@@ -18,4 +21,29 @@ func LoadConfig() Config {
 		Neo4jUser:     os.Getenv("NEO4J_USER"),
 		Neo4jPassword: os.Getenv("NEO4J_PASSWORD"),
 	}
+}
+
+// LoadEnv loads environment variables from a .env file, searching up the directory tree.
+func LoadEnv() error {
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	for {
+		envPath := filepath.Join(dir, ".env")
+		if _, err := os.Stat(envPath); err == nil {
+			// Found it
+			return godotenv.Load(envPath)
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break // Reached root
+		}
+		dir = parent
+	}
+
+	// Not found is fine
+	return nil
 }

@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"graphdb/internal/config"
-	"graphdb/internal/embedding"
 	"graphdb/internal/graph"
 	"graphdb/internal/ingest"
 	"graphdb/internal/loader"
@@ -37,25 +36,12 @@ func (p *SimpleTokenProvider) Token() (string, error) {
 	return p.TokenString, nil
 }
 
-// MockEmbedder for testing/dry-run
-type MockEmbedder struct{}
 
-func (m *MockEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
-	res := make([][]float32, len(texts))
-	for i := range texts {
-		res[i] = make([]float32, 768) // Dummy 768-dim vector
-	}
-	return res, nil
-}
-
-// MockSummarizer for placeholder RPG
-type MockSummarizer struct{}
-
-func (s *MockSummarizer) Summarize(snippets []string) (string, string, error) {
-	return "Mock Feature", "Automatically generated description based on " + fmt.Sprintf("%d", len(snippets)) + " snippets.", nil
-}
 
 func main() {
+	// Attempt to load .env file from current or parent directories
+	_ = config.LoadEnv()
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -89,22 +75,7 @@ func printUsage() {
 	fmt.Println("\nRun 'graphdb <command> --help' for command-specific options.")
 }
 
-func setupEmbedder(project, location, token string, mock bool) embedding.Embedder {
-	if mock || project == "" {
-		if !mock && project == "" {
-			log.Println("Using Mock Embedder (no -project provided)")
-		} else {
-			log.Println("Using Mock Embedder")
-		}
-		return &MockEmbedder{}
-	}
-	
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY") // Fallback
-	}
-	
-	return embedding.NewVertexEmbedder(project, location, &SimpleTokenProvider{TokenString: token})
-}
+
 
 func handleIngest(args []string) {
 	fs := flag.NewFlagSet("ingest", flag.ExitOnError)
@@ -116,7 +87,6 @@ func handleIngest(args []string) {
 	edgesPtr := fs.String("edges", "", "Output file path for edges")
 	projectPtr := fs.String("project", "", "GCP Project ID for Vertex AI")
 	locationPtr := fs.String("location", "us-central1", "GCP Location for Vertex AI")
-	mockEmbedPtr := fs.Bool("mock-embedding", false, "Use mock embedding instead of Vertex AI")
 	tokenPtr := fs.String("token", "", "GCP Access Token")
 
 	fs.Parse(args)
@@ -146,7 +116,7 @@ func handleIngest(args []string) {
 	defer emitter.Close()
 
 	// Setup Embedder
-	embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
+	embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
 
 	// Setup Walker
 	walker := ingest.NewWalker(*workersPtr, embedder, emitter)
@@ -194,47 +164,15 @@ func handleIngest(args []string) {
 	log.Printf("Done in %v.", time.Since(start))
 }
 
-func setupSummarizer(project, location, token string, mock bool) rpg.Summarizer {
-	if mock || project == "" {
-		if !mock && project == "" {
-			log.Println("Using Mock Summarizer (no -project provided)")
-		} else {
-			log.Println("Using Mock Summarizer")
-		}
-		return &MockSummarizer{}
-	}
-	
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY") // Fallback
-	}
-	
-	return rpg.NewVertexSummarizer(project, location, &SimpleTokenProvider{TokenString: token})
-}
 
-func setupExtractor(project, location, token string, mock bool) rpg.FeatureExtractor {
-	if mock || project == "" {
-		if !mock && project == "" {
-			log.Println("Using Mock Feature Extractor (no -project provided)")
-		} else {
-			log.Println("Using Mock Feature Extractor")
-		}
-		return &rpg.MockFeatureExtractor{}
-	}
 
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY")
-	}
 
-	return rpg.NewLLMFeatureExtractor(project, location, &SimpleTokenProvider{TokenString: token})
-}
 
 func handleEnrichFeatures(args []string) {
 	fs := flag.NewFlagSet("enrich-features", flag.ExitOnError)
 	dirPtr := fs.String("dir", ".", "Directory to analyze")
 	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
-	mockEmbedPtr := fs.Bool("mock-embedding", false, "Use mock embedding")
-	mockExtractPtr := fs.Bool("mock-extraction", false, "Use mock feature extraction")
 	tokenPtr := fs.String("token", "", "GCP Access Token")
 	inputPtr := fs.String("input", "graph.jsonl", "Input graph file")
 	outputPtr := fs.String("output", "rpg.jsonl", "Output file for RPG nodes and edges")
@@ -253,7 +191,7 @@ func handleEnrichFeatures(args []string) {
 	log.Printf("Loaded %d functions from %s", len(functions), *inputPtr)
 
 	// 2. Extract atomic features per function
-	extractor := setupExtractor(*projectPtr, *locationPtr, *tokenPtr, *mockExtractPtr || *mockEmbedPtr)
+	extractor := setupExtractor(*projectPtr, *locationPtr, *tokenPtr)
 	log.Printf("Extracting atomic features (batch size: %d)...", *batchSizePtr)
 	for i := range functions {
 		fn := &functions[i]
@@ -277,7 +215,7 @@ func handleEnrichFeatures(args []string) {
 	var clusterer rpg.Clusterer
 	switch *clusterModePtr {
 	case "semantic":
-		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
 		clusterer = &rpg.EmbeddingClusterer{Embedder: embedder}
 		log.Println("Using semantic clustering (embedding-based)")
 	default:
@@ -298,8 +236,8 @@ func handleEnrichFeatures(args []string) {
 	}
 
 	// 5. Setup Enricher
-	summarizer := setupSummarizer(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
-	embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
+	summarizer := setupSummarizer(*projectPtr, *locationPtr, *tokenPtr)
+	embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
 	enricher := &rpg.Enricher{
 		Client:   summarizer,
 		Embedder: embedder,
@@ -578,7 +516,6 @@ func handleQuery(args []string) {
 	// Embedder args for 'features' type
 	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
-	mockEmbedPtr := fs.Bool("mock-embedding", false, "Use mock embedding")
 	tokenPtr := fs.String("token", "", "GCP Access Token")
 
 	fs.Parse(args)
@@ -603,7 +540,7 @@ func handleQuery(args []string) {
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'search-features'")
 		}
-		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			 log.Fatalf("Embedding failed: %v", err)
@@ -614,7 +551,7 @@ func handleQuery(args []string) {
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'search-similar'")
 		}
-		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			 log.Fatalf("Embedding failed: %v", err)
@@ -632,7 +569,7 @@ func handleQuery(args []string) {
 		}
 
 		// 2. Semantic Search (Dependency Layer)
-		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			log.Printf("Warning: Embedding failed for hybrid search: %v", err)

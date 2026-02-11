@@ -34,7 +34,7 @@ func buildCLI(t *testing.T) string {
 	// Ensure bin directory exists
 	os.MkdirAll(filepath.Join(root, "bin"), 0755)
 
-	cmd := exec.Command("go", "build", "-o", outputPath, cmdPath)
+	cmd := exec.Command("go", "build", "-tags", "test_mocks", "-o", outputPath, cmdPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to build CLI: %v\nOutput: %s", err, output)
@@ -58,8 +58,8 @@ func TestCLI_Ingest(t *testing.T) {
 	cmd := exec.Command(cliPath, "ingest",
 		"-dir", fixturesPath,
 		"-output", outFile,
-		"-mock-embedding",
 	)
+	cmd.Env = append(os.Environ(), "GRAPHDB_MOCK_ENABLED=true")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Ingest command failed: %v\nOutput: %s", err, output)
