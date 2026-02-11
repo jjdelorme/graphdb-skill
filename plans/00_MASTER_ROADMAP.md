@@ -7,28 +7,28 @@
 
 ### Campaign 1: The Go Ingestor (Language Parity)
 **Goal:** Replace the Node.js extraction logic with a high-performance Go binary capable of parallel parsing and embedding, with **strict parity for existing languages**.
-**Status:** Planned
+**Status:** Completed
 **Key Deliverables:**
-- [ ] Standalone Go CLI (`graphdb`).
-- [ ] Parallel file walker with Worker Pools.
-- [ ] **Language Parity:** C#, C/C++, VB.NET, SQL, TypeScript.
-- [ ] Tree-sitter integration via CGO.
-- [ ] **Vertex AI Integration:** Embedding generation parity with `enrich_vectors.js`.
-- [ ] **Data Parity:** JSONL output strictly matches existing schema (Nodes/Edges).
-- [ ] Standardized JSONL output format via `Storage/Emitter` interface.
+- [x] Standalone Go CLI (`graphdb`).
+- [x] Parallel file walker with Worker Pools.
+- [x] **Language Parity:** C#, C/C++, VB.NET, SQL, TypeScript.
+- [x] Tree-sitter integration via CGO.
+- [x] **Vertex AI Integration:** Embedding generation parity with `enrich_vectors.js`.
+- [x] **Data Parity:** JSONL output strictly matches existing schema (Nodes/Edges).
+- [x] Standardized JSONL output format via `Storage/Emitter` interface.
 
 ### Campaign 2: The Graph Query Engine (Full Query Parity)
 **Goal:** Implement the "Read" side of the platform in Go, mirroring the "Write" side (Ingestor). This enables the Go binary to answer queries directly, preparing for the Spanner migration.
-**Status:** Planned
+**Status:** Completed
 **Key Deliverables:**
-- [ ] `GraphProvider` Interface (FindNode, Traverse, SearchFeatures).
-- [ ] `Neo4jProvider` implementation (connects to local Neo4j).
-- [ ] **Full Query Parity:** Port all critical query types: `hybrid-context`, `test-context`, `impact`, `globals`, `suggest-seams`.
-- [ ] Cypher Query Builder/Manager in Go.
+- [x] `GraphProvider` Interface (FindNode, Traverse, SearchFeatures).
+- [x] `Neo4jProvider` implementation (connects to local Neo4j).
+- [x] **Full Query Parity:** Port all critical query types: `hybrid-context`, `test-context`, `impact`, `globals`, `suggest-seams`.
+- [x] Cypher Query Builder/Manager in Go.
 
 ### Campaign 3: Gemini CLI Skill Integration (The Agent Bridge)
 **Goal:** Wrap the Go Binary in a Gemini CLI Skill to allow agents to invoke it directly for **both ingestion and querying**.
-**Status:** Pending
+**Status:** Planned
 **Key Deliverables:**
 - [ ] Update existing JS skill (`.gemini/skills/graphdb`) to spawn the Go binary.
 - [ ] **Unified Interface:** Skill delegates `extract` and `query` commands to the Go binary.

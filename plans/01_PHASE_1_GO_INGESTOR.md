@@ -10,13 +10,13 @@
 - [x] **Parity:** Implement parser for **C#**.
 - [x] **Parity:** Implement parsers for **C/C++**.
 - [x] **Parity:** Implement parser for **VB.NET**. ✅ Implemented
-- [ ] **Parity:** Implement parser for **SQL**.
+- [x] **Parity:** Implement parser for **SQL**.
 - [x] **Parity:** Implement parser for **TypeScript**.
-- [ ] **Enrichment:** Integrate Vertex AI for embedding generation.
+- [x] **Enrichment:** Integrate Vertex AI for embedding generation.
     - [x] **Client:** Implement Vertex AI client (`internal/embedding`).
-    - [ ] **Integration:** Wire into `ingest` worker.
-- [ ] **TDD:** Achieve 100% unit test coverage for parser logic.
-- [ ] **Verification:** "Golden Master" comparison between Node.js output and Go output.
+    - [x] **Integration:** Wire into `ingest` worker.
+- [x] **TDD:** Achieve 100% unit test coverage for parser logic.
+- [x] **Verification:** "Golden Master" comparison between Node.js output and Go output.
 
 ## 🔍 Analysis & Investigation
 
