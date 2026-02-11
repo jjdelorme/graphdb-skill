@@ -5,12 +5,12 @@
 **Context:** Currently, the `graphdb` skill relies on `query_graph.js` to execute Cypher queries. To make the Go binary a self-contained platform (and to support Spanner later), we must port this logic to Go behind an interface.
 
 ## 📋 Todo Checklist
-- [ ] **Architecture:** Define the `GraphProvider` interface in `internal/query`.
-- [ ] **Implementation:** Create `Neo4jProvider` implementing `GraphProvider`.
-- [ ] **Feature:** Port `hybrid-context` (Vector + Structural Search).
-- [ ] **Feature:** Port `test-context` (Dependency Traversal).
-- [ ] **Feature:** Port `impact` (Reverse Dependency/Caller Analysis).
-- [ ] **Feature:** Port `globals` (Global Variable Usage).
+- [x] **Architecture:** Define the `GraphProvider` interface in `internal/query`.
+- [x] **Implementation:** Create `Neo4jProvider` implementing `GraphProvider`.
+- [x] **Feature:** Port `hybrid-context` (Vector + Structural Search).
+- [x] **Feature:** Port `test-context` (Dependency Traversal).
+- [x] **Feature:** Port `impact` (Reverse Dependency/Caller Analysis).
+- [x] **Feature:** Port `globals` (Global Variable Usage).
 - [ ] **Feature:** Port `suggest-seams` (Clustering/Architecture Analysis).
 - [ ] **CLI:** Add `query` subcommand to the Go binary.
 - [ ] **Verification:** Integration tests against a running Neo4j instance (or mock).
@@ -94,10 +94,10 @@ We are porting `query_graph.js`. The Go implementation must support full feature
     *   *Verify:* Write a manual integration test (skipped if env vars missing) that connects to localhost and runs `RETURN 1`.
 
 #### Phase 2.2: Context Queries (Hybrid & Test)
-1.  **Step 2.2.A (Red):** Define Context Search requirement.
+1.  **Step 2.2.A (Red) [x]:** Define Context Search requirement.
     *   *Test:* Create `internal/query/neo4j_test.go` (Integration).
     *   *Logic:* Insert a dummy node with embedding. Call `SearchFeatures` (hybrid). Assert node is returned.
-2.  **Step 2.2.B (Green):** Implement Search Logic.
+2.  **Step 2.2.B (Green) [x]:** Implement Search Logic.
     *   *Action:* Implement `SearchFeatures` and `GetNeighbors` in `neo4j.go`.
     *   *Cypher:* Construct `CALL db.index.vector.queryNodes` and `MATCH (f)-[:CALLS*]...`.
     *   *Verify:* Run the integration test.

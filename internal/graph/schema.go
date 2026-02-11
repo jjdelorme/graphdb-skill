@@ -11,3 +11,8 @@ type Edge struct {
 	TargetID string `json:"targetId"`
 	Type     string `json:"type"`
 }
+
+type Path struct {
+	Nodes []*Node `json:"nodes"`
+	Edges []*Edge `json:"edges"`
+}
