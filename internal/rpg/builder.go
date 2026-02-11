@@ -20,13 +20,14 @@ type Builder struct {
 	Clusterer  Clusterer
 }
 
-func (b *Builder) Build(rootPath string, functions []graph.Node) ([]Feature, error) {
+func (b *Builder) Build(rootPath string, functions []graph.Node) ([]Feature, []graph.Edge, error) {
 	domains, err := b.Discoverer.DiscoverDomains(rootPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var rootFeatures []Feature
+	var allEdges []graph.Edge
 
 	for name, pathPrefix := range domains {
 		domainFeature := Feature{
@@ -54,15 +55,28 @@ func (b *Builder) Build(rootPath string, functions []graph.Node) ([]Feature, err
 				ID:   "feat-" + clusterName,
 				Name: clusterName,
 			}
-			// In a real impl, we would associate the 'nodes' (Functions) 
-			// with this 'child' (Feature) via "IMPLEMENTS" edges.
-			// For this structure-building phase, we just create the hierarchy.
+			
+			// Hierarchy: Domain PARENT_OF Cluster
+			allEdges = append(allEdges, graph.Edge{
+				SourceID: domainFeature.ID,
+				TargetID: child.ID,
+				Type:     "PARENT_OF",
+			})
+
+			// Implementation: Cluster IMPLEMENTS Function
+			for _, fn := range nodes {
+				allEdges = append(allEdges, graph.Edge{
+					SourceID: child.ID,
+					TargetID: fn.ID,
+					Type:     "IMPLEMENTS",
+				})
+			}
+
 			domainFeature.Children = append(domainFeature.Children, child)
-			_ = nodes 
 		}
 		
 		rootFeatures = append(rootFeatures, domainFeature)
 	}
 
-	return rootFeatures, nil
+	return rootFeatures, allEdges, nil
 }

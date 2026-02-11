@@ -38,31 +38,46 @@ func TestBuilder_Build(t *testing.T) {
 	}
 
 	// Execute
-	features, err := builder.Build("src/", functions)
+	features, edges, err := builder.Build("src/", functions)
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
-	// Verify
-	// We expect Top Level Features (Domains) -> Child Features (Clusters)
+	nodes, allEdges := Flatten(features, edges)
+
+	// Verify Structure
 	if len(features) != 2 {
 		t.Errorf("Expected 2 domain features, got %d", len(features))
 	}
 
-	// Check for Auth domain
-	var authFeature *Feature
-	for _, f := range features {
-		if f.Name == "Auth" {
-			authFeature = &f
-			break
+	// Verify Nodes (Features should be included)
+	// 2 Domains + 2 Clusters = 4 Feature nodes
+	if len(nodes) != 4 {
+		t.Errorf("Expected 4 feature nodes, got %d", len(nodes))
+	}
+
+	// Verify Edges
+	// 2 PARENT_OF (Domain -> Cluster)
+	// 2 IMPLEMENTS (Cluster -> Function)
+	if len(allEdges) != 4 {
+		t.Errorf("Expected 4 edges, got %d", len(allEdges))
+	}
+
+	foundImplements := 0
+	foundParentOf := 0
+	for _, e := range edges {
+		if e.Type == "IMPLEMENTS" {
+			foundImplements++
+		}
+		if e.Type == "PARENT_OF" {
+			foundParentOf++
 		}
 	}
 
-	if authFeature == nil {
-		t.Fatal("Auth domain not found")
+	if foundImplements != 2 {
+		t.Errorf("Expected 2 IMPLEMENTS edges, got %d", foundImplements)
 	}
-
-	// We expect the MockClusterer to have attached a child feature "AuthCore"
-	// Wait, the Builder needs to return a Tree structure or a flat list of nodes?
-	// The return type of Build should probably be a list of *Feature, where Features have Children.
+	if foundParentOf != 2 {
+		t.Errorf("Expected 2 PARENT_OF edges, got %d", foundParentOf)
+	}
 }

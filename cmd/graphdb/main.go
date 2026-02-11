@@ -193,16 +193,17 @@ func handleIngest(args []string) {
 
 func handleEnrichFeatures(args []string) {
 	fs := flag.NewFlagSet("enrich-features", flag.ExitOnError)
-	dirPtr := fs.String("dir", ".", "Directory to analyze") // Not strictly used if reading from graph.jsonl, but maybe for Discoverer
+	dirPtr := fs.String("dir", ".", "Directory to analyze")
 	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
 	mockEmbedPtr := fs.Bool("mock-embedding", false, "Use mock embedding")
 	tokenPtr := fs.String("token", "", "GCP Access Token")
 	inputPtr := fs.String("input", "graph.jsonl", "Input graph file")
+	outputPtr := fs.String("output", "rpg.jsonl", "Output file for RPG nodes and edges")
 
 	fs.Parse(args)
 
-	// Silence unused warnings for now as this is a placeholder implementation
+	// Will be used in Phase 4: LLM Integration
 	_ = projectPtr
 	_ = locationPtr
 	_ = mockEmbedPtr
@@ -224,30 +225,49 @@ func handleEnrichFeatures(args []string) {
 	}
 
 	// 3. Build Feature Hierarchy
-	features, err := builder.Build(*dirPtr, functions)
+	features, edges, err := builder.Build(*dirPtr, functions)
 	if err != nil {
 		log.Fatalf("Failed to build features: %v", err)
 	}
 
 	// 4. Setup Enricher
-	// In real implementation, this would use an LLM client
 	enricher := &rpg.Enricher{
 		Client: &MockSummarizer{},
 	}
 
 	// 5. Enrich Features
-	for _, f := range features {
-		// Naive: pass all functions to top level. In reality, build returns tree with assigned nodes.
-		// Since our mock builder doesn't really assign nodes deeply, we verify what we have.
-		// builder.Build returns root features.
-		
-		// For the purpose of this shim, we just enrich the roots.
-		if err := enricher.Enrich(&f, functions); err != nil {
-			log.Printf("Warning: failed to enrich feature %s: %v", f.Name, err)
+	for i := range features {
+		if err := enricher.Enrich(&features[i], functions); err != nil {
+			log.Printf("Warning: failed to enrich feature %s: %v", features[i].Name, err)
 		}
 	}
 
-	// 6. Output (JSON to stdout)
+	// 6. Flatten for Persistence
+	nodes, allEdges := rpg.Flatten(features, edges)
+
+	// 7. Persistence (Emit to storage)
+	outFile, err := os.Create(*outputPtr)
+	if err != nil {
+		log.Fatalf("Failed to create output file: %v", err)
+	}
+	defer outFile.Close()
+	emitter := storage.NewJSONLEmitter(outFile)
+	defer emitter.Close()
+
+	for i := range nodes {
+		if err := emitter.EmitNode(&nodes[i]); err != nil {
+			log.Printf("Warning: failed to emit node: %v", err)
+		}
+	}
+	for i := range allEdges {
+		if err := emitter.EmitEdge(&allEdges[i]); err != nil {
+			log.Printf("Warning: failed to emit edge: %v", err)
+		}
+	}
+
+	log.Printf("Successfully emitted %d nodes and %d edges to %s", len(nodes), len(allEdges), *outputPtr)
+
+	// 8. Output (JSON Tree to stdout for debugging/UI)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(features); err != nil {

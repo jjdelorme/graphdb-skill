@@ -23,3 +23,23 @@ func (f *Feature) ToNode() graph.Node {
 		},
 	}
 }
+
+func Flatten(features []Feature, edges []graph.Edge) ([]graph.Node, []graph.Edge) {
+	var nodes []graph.Node
+	var allEdges []graph.Edge
+	allEdges = append(allEdges, edges...)
+
+	var visit func(f *Feature)
+	visit = func(f *Feature) {
+		nodes = append(nodes, f.ToNode())
+		for _, child := range f.Children {
+			visit(child)
+		}
+	}
+
+	for i := range features {
+		visit(&features[i])
+	}
+
+	return nodes, allEdges
+}

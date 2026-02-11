@@ -26,17 +26,35 @@
 - [x] **Full Query Parity:** Port all critical query types: `hybrid-context`, `test-context`, `impact`, `globals`, `suggest-seams`.
 - [x] Cypher Query Builder/Manager in Go.
 
-### Campaign 3: The RPG Core (Intent Layer)
-**Goal:** Implement the Repository Planning Graph (RPG) schema, Hybrid Construction pipeline, and Semantic Routing directly in the Go binary. This creates the "Intent View" required for advanced agent reasoning.
+### Campaign 3: The RPG Core (Intent Layer Structure)
+**Goal:** Define the Repository Planning Graph (RPG) schema and interfaces. (Note: Initial implementation was a skeleton/prototype).
 **Status:** Completed
 **Key Deliverables:**
 - [x] **Schema Upgrade:** `Feature` struct and graph schema (Nodes/Edges) in Go.
-- [x] **Hybrid Construction:** Implemented placeholder "Hybrid Construction" pipeline (Top-Down Seeding + Constrained Clustering).
-- [x] **Enrichment Loop:** `enrich-features` command added (Mock LLM integration).
-- [x] **Search Capability:** `search-features` and `search-similar` query types.
-- [x] **Semantic Routing:** Logic to route code changes (Initial Top-Down logic).
+- [x] **Interfaces:** `DomainDiscoverer`, `Clusterer`, `Summarizer` interfaces defined.
+- [x] **CLI Commands:** `enrich-features` and `search-features` commands registered.
+- [x] **Search Capability:** `search-features` query type.
 
-### Campaign 4: Gemini CLI Skill Integration (The Agent Bridge)
+### Campaign 3.5: RPG Realization (From Prototype to Production)
+**Goal:** Replace the RPG placeholders (Campaign 3 skeleton) with fully functional logic for Domain Discovery, Clustering, Persistence, and LLM Integration.
+**Status:** **Active (Priority)**
+**Key Deliverables:**
+- [ ] **Real Domain Discovery:** Replace `SimpleDomainDiscoverer` with directory/heuristic-based logic.
+- [ ] **Semantic Clustering:** Replace `SimpleClusterer` with embedding-based or structural clustering to group functions into Features.
+- [ ] **Persistence Wiring:** Ensure `enrich-features` emits `IMPLEMENTS` edges and `Feature` nodes to storage (Neo4j/JSONL).
+- [ ] **LLM Integration:** Connect `Summarizer` to real Vertex AI client for generation.
+- [ ] **E2E Verification:** Verify a real graph is built and queryable.
+
+### Campaign 4: The Go Import Loader (Dependency Removal)
+**Goal:** Port the Neo4j bulk loading logic (`import_to_neo4j.js`) to Go, eliminating the Node.js runtime dependency for standard workflows.
+**Status:** Active
+**Key Deliverables:**
+- [ ] New package `internal/loader` for batch processing JSONL.
+- [ ] `import` CLI command in `cmd/graphdb`.
+- [ ] **Parity:** Support for `-clean`, `-incremental`, and `GraphState` commit tracking.
+- [ ] **Optimization:** Efficient batching using `UNWIND` cypher queries.
+
+### Campaign 4.5: Gemini CLI Skill Integration (The Agent Bridge)
 **Goal:** Wrap the Go Binary in a Gemini CLI Skill to allow agents to invoke it directly for **both ingestion and querying**.
 **Status:** Completed
 **Key Deliverables:**
