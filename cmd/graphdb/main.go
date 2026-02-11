@@ -10,14 +10,19 @@ import (
 	"graphdb/internal/embedding"
 	"graphdb/internal/graph"
 	"graphdb/internal/ingest"
+	"graphdb/internal/loader"
 	"graphdb/internal/query"
 	"graphdb/internal/rpg"
 	"graphdb/internal/storage"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 // SimpleTokenProvider implements embedding.TokenProvider
@@ -80,6 +85,8 @@ func main() {
 		handleQuery(os.Args[2:])
 	case "enrich-features":
 		handleEnrichFeatures(os.Args[2:])
+	case "import":
+		handleImport(os.Args[2:])
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
 		os.Exit(1)
@@ -287,6 +294,190 @@ func handleEnrichFeatures(args []string) {
 	if err := enc.Encode(features); err != nil {
 		log.Fatalf("Failed to encode features: %v", err)
 	}
+}
+
+func handleImport(args []string) {
+	fs := flag.NewFlagSet("import", flag.ExitOnError)
+	nodesPtr := fs.String("nodes", "", "Path to nodes JSONL file")
+	edgesPtr := fs.String("edges", "", "Path to edges JSONL file")
+	inputPtr := fs.String("input", "", "Path to combined JSONL file (nodes + edges)")
+	batchSizePtr := fs.Int("batch-size", 500, "Batch size for insertion")
+	cleanPtr := fs.Bool("clean", false, "Wipe database before importing")
+	
+	fs.Parse(args)
+
+	if *nodesPtr == "" && *edgesPtr == "" && *inputPtr == "" {
+		log.Fatal("Either -input or both -nodes and -edges must be provided")
+	}
+
+	cfg := config.LoadConfig()
+	if cfg.Neo4jURI == "" {
+		log.Fatal("NEO4J_URI environment variable is not set")
+	}
+
+	driver, err := neo4j.NewDriverWithContext(cfg.Neo4jURI, neo4j.BasicAuth(cfg.Neo4jUser, cfg.Neo4jPassword, ""))
+	if err != nil {
+		log.Fatalf("Failed to create Neo4j driver: %v", err)
+	}
+	defer driver.Close(context.Background())
+
+	loader := loader.NewNeo4jLoader(driver, "neo4j") // Default DB name
+
+	ctx := context.Background()
+
+	// 1. Clean Database (Phase 3)
+	if *cleanPtr {
+		log.Println("Wiping database...")
+		if err := loader.Wipe(ctx); err != nil {
+			log.Fatalf("Failed to wipe database: %v", err)
+		}
+	}
+
+	// 2. Apply Constraints
+	log.Println("Applying schema constraints...")
+	if err := loader.ApplyConstraints(ctx); err != nil {
+		log.Printf("Warning: failed to apply constraints: %v", err)
+	}
+
+	// 3. Load Nodes
+	var nodeFiles []string
+	if *inputPtr != "" {
+		nodeFiles = append(nodeFiles, *inputPtr)
+	}
+	if *nodesPtr != "" {
+		nodeFiles = append(nodeFiles, *nodesPtr)
+	}
+
+	for _, path := range nodeFiles {
+		log.Printf("Importing nodes from %s...", path)
+		if err := processBatches(path, *batchSizePtr, func(batch []json.RawMessage) error {
+			var nodes []graph.Node
+			for _, raw := range batch {
+				var n graph.Node
+				// Try to parse as node. If "type" field exists and is "Function" etc.
+				// For combined files, we need to check if it's a node or edge
+				var meta map[string]interface{}
+				if err := json.Unmarshal(raw, &meta); err != nil {
+					continue
+				}
+				
+				// Heuristic: Edges have sourceId/targetId/type
+				if _, ok := meta["sourceId"]; ok {
+					continue // It's an edge
+				}
+				
+				if err := json.Unmarshal(raw, &n); err == nil {
+					nodes = append(nodes, n)
+				}
+			}
+			return loader.BatchLoadNodes(ctx, nodes)
+		}); err != nil {
+			log.Fatalf("Failed to import nodes: %v", err)
+		}
+	}
+
+	// 3. Load Edges
+	var edgeFiles []string
+	if *inputPtr != "" {
+		edgeFiles = append(edgeFiles, *inputPtr)
+	}
+	if *edgesPtr != "" {
+		edgeFiles = append(edgeFiles, *edgesPtr)
+	}
+
+	for _, path := range edgeFiles {
+		log.Printf("Importing edges from %s...", path)
+		if err := processBatches(path, *batchSizePtr, func(batch []json.RawMessage) error {
+			var edges []graph.Edge
+			for _, raw := range batch {
+				var e graph.Edge
+				var meta map[string]interface{}
+				if err := json.Unmarshal(raw, &meta); err != nil {
+					continue
+				}
+				
+				if _, ok := meta["sourceId"]; !ok {
+					continue // It's a node
+				}
+				
+				if err := json.Unmarshal(raw, &e); err == nil {
+					edges = append(edges, e)
+				}
+			}
+			return loader.BatchLoadEdges(ctx, edges)
+		}); err != nil {
+			log.Fatalf("Failed to import edges: %v", err)
+		}
+	}
+	
+	log.Println("Import complete.")
+
+	// 5. Update Graph State (Commit Hash)
+	// Try to get current git commit
+	if commit, err := getGitCommit(); err == nil && commit != "" {
+		log.Printf("Updating graph state with commit %s...", commit)
+		if err := loader.UpdateGraphState(ctx, commit); err != nil {
+			log.Printf("Warning: failed to update graph state: %v", err)
+		}
+	}
+}
+
+func getGitCommit() (string, error) {
+	// Simple git rev-parse HEAD
+	// In a real CLI, we might use the git library or exec
+	// Since we are inside the repo, exec is fine
+	cmd := "git"
+	args := []string{"rev-parse", "HEAD"}
+	
+	out, err := execCommand(cmd, args...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Wrapper for testing/mocking if needed
+var execCommand = func(name string, arg ...string) ([]byte, error) {
+	c := exec.Command(name, arg...)
+	return c.Output()
+}
+
+func processBatches(path string, batchSize int, process func([]json.RawMessage) error) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	// Increase buffer size for large lines
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 10*1024*1024)
+
+	var batch []json.RawMessage
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		// Copy slice because scanner reuses it
+		item := make([]byte, len(line))
+		copy(item, line)
+		
+		batch = append(batch, item)
+		
+		if len(batch) >= batchSize {
+			if err := process(batch); err != nil {
+				return err
+			}
+			batch = batch[:0]
+		}
+	}
+	
+	if len(batch) > 0 {
+		if err := process(batch); err != nil {
+			return err
+		}
+	}
+	
+	return scanner.Err()
 }
 
 func loadFunctions(path string) ([]graph.Node, error) {
