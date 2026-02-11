@@ -56,6 +56,7 @@ func (p *VBNetParser) Parse(filePath string, content []byte) ([]*graph.Node, []*
 				Label: "Class",
 				Properties: map[string]interface{}{
 					"name": className,
+					"file": filePath,
 				},
 			}
 			nodes = append(nodes, classNode)
@@ -73,6 +74,7 @@ func (p *VBNetParser) Parse(filePath string, content []byte) ([]*graph.Node, []*
 				Properties: map[string]interface{}{
 					"name":      funcName,
 					"signature": trimmed, // Rough signature
+					"file":      filePath,
 				},
 			}
 			nodes = append(nodes, funcNode)

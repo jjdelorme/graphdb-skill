@@ -68,7 +68,7 @@ func (wp *WorkerPool) processFile(path string) error {
 		Label: "File",
 		Properties: map[string]interface{}{
 			"file": path,
-			"name": filepath.Base(path),
+			"name": path,
 		},
 	}
 

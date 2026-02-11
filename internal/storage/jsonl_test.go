@@ -78,3 +78,42 @@ func TestJSONLEmitter_EmitEdge(t *testing.T) {
 		t.Errorf("Expected type 'CALLS', got %v", output["type"])
 	}
 }
+
+func TestJSONLEmitter_Concurrent(t *testing.T) {
+	// Concurrent writes to a bytes.Buffer are not safe, so we need a thread-safe writer
+	// or rely on JSONLEmitter to serialize access.
+	// Since we are testing JSONLEmitter's thread safety, we expect it to protect the writer.
+	// However, bytes.Buffer itself is not thread safe, so if JSONLEmitter doesn't lock,
+	// this test will likely panic or fail with -race.
+	var buf bytes.Buffer
+	emitter := storage.NewJSONLEmitter(&buf)
+
+	concurrency := 10
+	itemsPerRoutine := 100
+	done := make(chan bool)
+
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			for j := 0; j < itemsPerRoutine; j++ {
+				_ = emitter.EmitNode(&graph.Node{
+					ID:    "node",
+					Label: "test",
+				})
+			}
+			done <- true
+		}()
+	}
+
+	for i := 0; i < concurrency; i++ {
+		<-done
+	}
+
+	// Basic check: we should have (concurrency * itemsPerRoutine) lines
+	// Note: checking line count accurately requires splitting the buffer.
+	// If race occurs, output might be garbled.
+	lines := bytes.Count(buf.Bytes(), []byte("\n"))
+	expected := concurrency * itemsPerRoutine
+	if lines != expected {
+		t.Errorf("Expected %d lines, got %d", expected, lines)
+	}
+}

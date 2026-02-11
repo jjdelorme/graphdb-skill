@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"graphdb/internal/graph"
 	"io"
+	"sync"
 )
 
 // JSONLEmitter implements the Emitter interface for writing JSONL files
@@ -11,6 +12,7 @@ import (
 type JSONLEmitter struct {
 	w       io.Writer
 	encoder *json.Encoder
+	mu      sync.Mutex
 }
 
 // NewJSONLEmitter creates a new JSONLEmitter writing to w.
@@ -27,6 +29,9 @@ func NewJSONLEmitter(w io.Writer) *JSONLEmitter {
 // - node.Label -> "type"
 // - node.Properties -> flattened into root object
 func (e *JSONLEmitter) EmitNode(node *graph.Node) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	out := make(map[string]interface{})
 
 	// Copy properties first so they don't overwrite ID/Type if key collision exists (though they shouldn't)
@@ -49,6 +54,9 @@ func (e *JSONLEmitter) EmitNode(node *graph.Node) error {
 // - edge.TargetID -> "target"
 // - edge.Type -> "type"
 func (e *JSONLEmitter) EmitEdge(edge *graph.Edge) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	out := map[string]string{
 		"source": edge.SourceID,
 		"target": edge.TargetID,

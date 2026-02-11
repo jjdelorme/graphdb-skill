@@ -1,0 +1,10 @@
+CREATE FUNCTION CalculateTotal() RETURNS INT AS $$
+BEGIN
+    RETURN 100;
+END; $$ LANGUAGE plpgsql;
+
+CREATE FUNCTION ProcessOrder() RETURNS VOID AS $$
+BEGIN
+    SELECT CalculateTotal();
+END;
+$$ LANGUAGE plpgsql;
