@@ -18,7 +18,12 @@ temp_tools/
 # Go compiled binaries
 /graphdb
 /bin/graphdb
+/bin/graphdb_test
 .gemini/skills/graphdb/scripts/graphdb
+
+# Test Artifacts
+test/output/
+asp_test.jsonl
 
 # Dependencies
 /node_modules/
