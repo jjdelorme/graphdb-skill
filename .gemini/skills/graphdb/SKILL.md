@@ -10,45 +10,73 @@ Your goal is to answer questions about dependencies, seams, testing contexts, an
 
 ## Tool Usage
 You will use the `graphdb` Go binary directly.
-**Base Command:** `bin/graphdb <command> [options]`
+**Base Command:** `./scripts/graphdb <command> [options]`
 
 ## Setup & Infrastructure
 
 ### Installation
-The skill relies on a pre-compiled Go binary (`bin/graphdb`). Ensure Go 1.24+ is installed to build it if necessary.
+The skill relies on a pre-compiled Go binary (`./scripts/graphdb`).
+If it does not exist, build it from the project root: `go build -o .gemini/skills/graphdb/scripts/graphdb cmd/graphdb/main.go`
 
-### 1. Ingestion (Extraction & Enrichment)
-Scans the codebase, generates embeddings, and prepares JSONL data for import.
-*   **Command:** `bin/graphdb ingest -dir . -nodes .gemini/graph_data/nodes.jsonl -edges .gemini/graph_data/edges.jsonl -project $GOOGLE_CLOUD_PROJECT`
-*   **Note:** You must provide `-project` to generate real Vertex AI embeddings. Omit it to use Mock embeddings (faster, but no semantic search).
-*   **Performance:** Parallelized execution with multi-threaded Go workers.
+### Environment Variables
+Ensure the following are set (typically in `.env` or your session):
+*   `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (Required for `import` and `query`)
+*   `GOOGLE_CLOUD_PROJECT` (Required for Vertex AI embeddings)
+*   `GOOGLE_CLOUD_LOCATION` (Default: `us-central1`)
 
-### 2. RPG Construction (⚠️ REQUIRES APPROVAL)
-Builds the "Intent Layer" (Functional Hierarchy) using LLMs.
-*   **Command:** `bin/graphdb enrich-features -input .gemini/graph_data/nodes.jsonl`
-*   **Goal:** Groups code into semantic features (RPG).
+## Workflows
 
-### 3. Import
-Loads the generated JSONL files into Neo4j.
-*   **Command:** `node .gemini/skills/graphdb/scripts/import_to_neo4j.js`
-*   **Note:** This capability has not yet been ported to the Go binary.
+### 1. Ingestion Pipeline (Full Rebuild)
+To rebuild the graph from source:
 
-## Primary Use Cases
+1.  **Ingest (Parse & Embed):**
+    Scans code, generates embeddings, and creates a graph JSONL file.
+    ```bash
+    ./scripts/graphdb ingest -dir . -output graph.jsonl -project $GOOGLE_CLOUD_PROJECT
+    ```
+    *   *Options:* `-workers` (concurrency), `-file-list` (specific files), `-mock-embedding` (fast, no semantic search).
 
-### 1. Intent-Based Search (RPG)
-Find where a concept or feature lives in the code before looking at files.
-*   **Command:** `bin/graphdb query -type search-features -target "concept" -project $GOOGLE_CLOUD_PROJECT`
+2.  **Enrich (Build Intent Layer):**
+    Groups code into high-level features (RPG) using LLMs.
+    ```bash
+    ./scripts/graphdb enrich-features -input graph.jsonl -output rpg.jsonl -cluster-mode semantic -project $GOOGLE_CLOUD_PROJECT
+    ```
+    *   *Options:* `-cluster-mode` (`file` or `semantic`), `-mock-extraction` (skip LLM calls).
 
-### 2. Dependency Analysis (Test Context)
-Determine what a function depends on to set up tests.
-*   **Command:** `bin/graphdb query -type neighbors -target "function_name"`
+3.  **Import (Load to Neo4j):**
+    Loads the generated JSONL files into the active Neo4j database.
+    ```bash
+    ./scripts/graphdb import -input graph.jsonl -clean
+    # AND/OR
+    ./scripts/graphdb import -input rpg.jsonl
+    ```
+    *   *Options:* `-clean` (wipe DB first), `-batch-size`.
 
-### 3. Hybrid Context (Refactoring Helper)
-Find both structural dependencies and semantic relations.
-*   **Command:** `bin/graphdb query -type hybrid-context -target "function_name" -project $GOOGLE_CLOUD_PROJECT`
+### 2. Analysis & Querying
+The primary way to interact with the graph is via the `query` command.
+
+**Base Syntax:**
+```bash
+./scripts/graphdb query -type <type> -target "<search_term>" [options]
+```
+
+#### Query Types Reference
+
+| Type | Description | Target | Options |
+| :--- | :--- | :--- | :--- |
+| `search-features` | **Intent Search.** Find features/concepts using vector search. | Natural language query | `-limit` |
+| `search-similar` | **Code Search.** Find functions semantically similar to a query. | Natural language or code snippet | `-limit` |
+| `neighbors` | **Dependency Analysis.** Find immediate callers and callees. | Function Name (exact) | `-depth` |
+| `hybrid-context` | **Combined.** Structural neighbors + semantic similarities. Great for refactoring. | Function Name | `-depth`, `-limit` |
+| `impact` | **Risk Analysis.** What other parts of the system behave differently if I change this? | Function Name | `-depth` |
+| `globals` | **State Analysis.** Find global variables used by a function. | Function Name | |
+| `seams` | **Architecture.** Identify testing seams in a module. | (Ignored) | `-module <regex>` |
+| `locate-usage` | **Trace.** Find path/usage between two functions. | Function 1 | `-target2 <Function 2>` |
+| `fetch-source` | **Read.** Fetch the source code of a function by ID/Name. | Function Name | |
+| `explore-domain` | **Discovery.** Explore the domain model around a concept. | Concept/Entity Name | |
 
 ## Operational Guidelines
-*   **Argument Naming:** Use `-target` for function/concept names. Use `-depth` for traversal depth.
-*   **Output:** The tool returns JSON. You should parse this and present a concise, readable summary (bullet points, tables).
+*   **Output Parsing:** The tool returns JSON. Parse it and present a concise summary (bullet points, mermaid diagrams, or tables).
+*   **Exact Names:** Structural queries (`neighbors`, `impact`) require exact function names. Use `search-similar` first if you are unsure of the name.
 *   **Context:** Always mention the source file and line number when discussing a function.
-*   **Missing Data:** If a query returns empty, verify the spelling of the function/module name.
+*   **Missing Data:** If a query returns empty, verify the spelling of the function/module name or try a semantic search.
