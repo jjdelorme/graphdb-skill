@@ -42,7 +42,8 @@ func (p *VBNetParser) Parse(filePath string, content []byte) ([]*graph.Node, []*
 	currentFunction := ""
 	// currentClass := "" // Not strictly needed for call tracking unless we want fully qualified names
 
-	for _, line := range lines {
+	for i, line := range lines {
+		lineNumber := i + 1
 		trimmed := strings.TrimSpace(line)
 		
 		// 1. Check for Class/Module Definition
@@ -57,6 +58,7 @@ func (p *VBNetParser) Parse(filePath string, content []byte) ([]*graph.Node, []*
 				Properties: map[string]interface{}{
 					"name": className,
 					"file": filePath,
+					"line": lineNumber,
 				},
 			}
 			nodes = append(nodes, classNode)
@@ -75,6 +77,7 @@ func (p *VBNetParser) Parse(filePath string, content []byte) ([]*graph.Node, []*
 					"name":      funcName,
 					"signature": trimmed, // Rough signature
 					"file":      filePath,
+					"line":      lineNumber,
 				},
 			}
 			nodes = append(nodes, funcNode)
