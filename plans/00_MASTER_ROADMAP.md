@@ -78,12 +78,12 @@
 
 ### Campaign 4.6: Snippet Service Extraction (Modularization)
 **Goal:** Extract file slicing and pattern matching logic from `internal/query/neo4j.go` into a dedicated `internal/tools/snippet` package to ensure parity with the legacy `SnippetService.js`.
-**Status:** In Progress
+**Status:** Completed
 **Key Deliverables:**
-- [ ] New `internal/tools/snippet` package.
-- [ ] `SliceFile` and `FindPatternInScope` implementation with tests.
-- [ ] Refactored `FetchSource` and `LocateUsage` in `Neo4jProvider`.
-- [ ] **Parity:** Context-aware pattern matching.
+- [x] New `internal/tools/snippet` package.
+- [x] `SliceFile` and `FindPatternInScope` implementation with tests.
+- [x] Refactored `FetchSource` and `LocateUsage` in `Neo4jProvider`.
+- [x] **Parity:** Context-aware pattern matching.
 
 ### Campaign 5: The Spanner Backend (Storage Swap)
 **Goal:** Establish the multi-tenant, immutable storage layer using Google Spanner Graph by swapping the storage implementation.

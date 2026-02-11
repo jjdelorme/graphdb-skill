@@ -1,18 +1,18 @@
 # Feature Implementation Plan: Snippet Service Extraction
 
 ## 📋 Todo Checklist
-- [ ] **Phase 1: Snippet Service Implementation**
-    - [ ] Create `internal/tools/snippet` package structure.
-    - [ ] Implement `SliceFile` logic.
-    - [ ] Implement `FindPatternInScope` logic.
-    - [ ] Add comprehensive unit tests in `snippet_test.go`.
-- [ ] **Phase 2: Refactoring Neo4j Provider**
-    - [ ] Refactor `FetchSource` in `internal/query/neo4j.go` to use `snippet.SliceFile`.
-    - [ ] Refactor `LocateUsage` in `internal/query/neo4j.go` to use `snippet.SliceFile` and `snippet.FindPatternInScope`.
-    - [ ] Align `LocateUsage` output format with legacy `SnippetService.js` (parity).
-- [ ] **Phase 3: Verification**
-    - [ ] Run `go test ./internal/tools/snippet/...`
-    - [ ] Verify `FetchSource` and `LocateUsage` functionality (manual or integration test if possible).
+- [x] **Phase 1: Snippet Service Implementation**
+    - [x] Create `internal/tools/snippet` package structure.
+    - [x] Implement `SliceFile` logic.
+    - [x] Implement `FindPatternInScope` logic.
+    - [x] Add comprehensive unit tests in `snippet_test.go`.
+- [x] **Phase 2: Refactoring Neo4j Provider**
+    - [x] Refactor `FetchSource` in `internal/query/neo4j.go` to use `snippet.SliceFile`.
+    - [x] Refactor `LocateUsage` in `internal/query/neo4j.go` to use `snippet.SliceFile` and `snippet.FindPatternInScope`.
+    - [x] Align `LocateUsage` output format with legacy `SnippetService.js` (parity).
+- [x] **Phase 3: Verification**
+    - [x] Run `go test ./internal/tools/snippet/...`
+    - [x] Verify `FetchSource` and `LocateUsage` functionality (manual or integration test if possible).
 
 ## 🔍 Analysis & Investigation
 ### Current State

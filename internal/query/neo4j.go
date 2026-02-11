@@ -1,13 +1,11 @@
 package query
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"graphdb/internal/config"
 	"graphdb/internal/graph"
-	"os"
-	"strings"
+	"graphdb/internal/tools/snippet"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
@@ -409,33 +407,13 @@ func (p *Neo4jProvider) FetchSource(nodeID string) (string, error) {
 		return "", fmt.Errorf("node %s has no file associated", nodeID)
 	}
 
-	// Read file
-	f, err := os.Open(file)
-	if err != nil {
-		return "", fmt.Errorf("failed to open file %s: %w", file, err)
-	}
-	defer f.Close()
-
 	if start == 0 && end == 0 {
 		// Default to first 50 lines if no line info
 		start = 1
 		end = 50
 	}
 
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	currentLine := int64(0)
-	for scanner.Scan() {
-		currentLine++
-		if currentLine >= start && currentLine <= end {
-			lines = append(lines, scanner.Text())
-		}
-		if currentLine > end {
-			break
-		}
-	}
-
-	return strings.Join(lines, "\n"), scanner.Err()
+	return snippet.SliceFile(file, int(start), int(end))
 }
 
 // LocateUsage identifies where a dependency is used within a function.
@@ -471,33 +449,12 @@ func (p *Neo4jProvider) LocateUsage(sourceID string, targetID string) (any, erro
 		return nil, fmt.Errorf("source node %s missing location info", sourceID)
 	}
 
-	// Read file and slice
-	f, err := os.Open(file)
+	content, err := snippet.SliceFile(file, int(start), int(end))
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file %s: %w", file, err)
-	}
-	defer f.Close()
-
-	var matches []map[string]any
-	scanner := bufio.NewScanner(f)
-	currentLine := int64(0)
-	for scanner.Scan() {
-		currentLine++
-		if currentLine >= start && currentLine <= end {
-			lineText := scanner.Text()
-			if strings.Contains(lineText, targetName) {
-				matches = append(matches, map[string]any{
-					"line":    currentLine,
-					"content": strings.TrimSpace(lineText),
-				})
-			}
-		}
-		if currentLine > end {
-			break
-		}
+		return nil, err
 	}
 
-	return matches, scanner.Err()
+	return snippet.FindPatternInScope(content, targetName, 0, int(start))
 }
 
 // ExploreDomain returns the hierarchy context for a Feature node:
