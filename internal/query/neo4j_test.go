@@ -29,7 +29,7 @@ func getProvider(t *testing.T) *Neo4jProvider {
 
 func cleanup(t *testing.T, p *Neo4jProvider) {
 	_, err := neo4j.ExecuteQuery(p.ctx, p.driver, `
-		MATCH (n) WHERE n.label STARTS WITH 'Test' OR n.file = 'test_fixture.go' DETACH DELETE n
+		MATCH (n) WHERE n.label STARTS WITH 'Test' OR n.label = 'ContaminatedCaller' OR n.label = 'SeamFunc' OR n.file = 'test_fixture.go' DETACH DELETE n
 	`, nil, neo4j.EagerResultTransformer)
 	if err != nil {
 		t.Logf("Failed to cleanup: %v", err)
@@ -190,6 +190,43 @@ func TestGetGlobals(t *testing.T) {
 	}
 	if result.Globals[0].Properties["file"] != "test_fixture.go" {
 		t.Errorf("Expected file property to be test_fixture.go")
+	}
+}
+
+func TestGetSeams(t *testing.T) {
+	p := getProvider(t)
+	defer p.Close()
+	defer cleanup(t, p)
+
+	setupQuery := `
+		CREATE (caller:Function {label: 'ContaminatedCaller', ui_contaminated: true})
+		CREATE (seam:Function {label: 'SeamFunc', ui_contaminated: false, risk_score: 0.8})
+		CREATE (file:File {file: 'test_fixture.go'})
+		CREATE (caller)-[:CALLS]->(seam)
+		CREATE (seam)-[:DEFINED_IN]->(file)
+	`
+	_, err := neo4j.ExecuteQuery(p.ctx, p.driver, setupQuery, nil, neo4j.EagerResultTransformer)
+	if err != nil {
+		t.Fatalf("Failed to setup fixture: %v", err)
+	}
+
+	// Test with matching pattern
+	results, err := p.GetSeams(".*test_fixture.*")
+	if err != nil {
+		t.Fatalf("GetSeams failed: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 seam, got %d", len(results))
+	}
+	if results[0].Seam != "SeamFunc" {
+		t.Errorf("Expected SeamFunc, got %s", results[0].Seam)
+	}
+	if results[0].File != "test_fixture.go" {
+		t.Errorf("Expected test_fixture.go, got %s", results[0].File)
+	}
+	if results[0].Risk != 0.8 {
+		t.Errorf("Expected risk 0.8, got %f", results[0].Risk)
 	}
 }
 

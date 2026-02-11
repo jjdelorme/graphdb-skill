@@ -43,9 +43,11 @@ type GlobalUsageResult struct {
 	Globals []*graph.Node `json:"globals"`
 }
 
-// SeamResult represents suggested architectural seams (clusters).
+// SeamResult represents a suggested architectural seam (boundary).
 type SeamResult struct {
-	Clusters map[string][]*graph.Node `json:"clusters"`
+	Seam string  `json:"seam"`
+	File string  `json:"file"`
+	Risk float64 `json:"risk"`
 }
 
 // GraphProvider defines the interface for graph database operations.
@@ -63,5 +65,5 @@ type GraphProvider interface {
 	GetCallers(nodeID string) ([]string, error)
 	GetImpact(nodeID string, depth int) (*ImpactResult, error)
 	GetGlobals(nodeID string) (*GlobalUsageResult, error)
-	SuggestSeams() (*SeamResult, error)
+	GetSeams(modulePattern string) ([]*SeamResult, error)
 }

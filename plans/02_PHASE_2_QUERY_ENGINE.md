@@ -11,9 +11,9 @@
 - [x] **Feature:** Port `test-context` (Dependency Traversal).
 - [x] **Feature:** Port `impact` (Reverse Dependency/Caller Analysis).
 - [x] **Feature:** Port `globals` (Global Variable Usage).
-- [ ] **Feature:** Port `suggest-seams` (Clustering/Architecture Analysis).
-- [ ] **CLI:** Add `query` subcommand to the Go binary.
-- [ ] **Verification:** Integration tests against a running Neo4j instance (or mock).
+- [x] **Feature:** Port `suggest-seams` (Clustering/Architecture Analysis).
+- [x] **CLI:** Add `query` subcommand to the Go binary.
+- [x] **Verification:** Integration tests against a running Neo4j instance (or mock).
 
 ## 🔍 Analysis & Investigation
 
@@ -111,10 +111,10 @@ We are porting `query_graph.js`. The Go implementation must support full feature
     *   *Verify:* Run integration test.
 
 #### Phase 2.4: Architecture Analysis (Seams)
-1.  **Step 2.4.A (Red):** Define Seams requirement.
+1.  **Step 2.4.A (Red) [x]:** Define Seams requirement.
     *   *Test:* Add to `internal/query/neo4j_test.go`. Create two disconnected clusters of nodes.
     *   *Logic:* Call `SuggestSeams`. Expect result to identify two groups.
-2.  **Step 2.4.B (Green):** Implement Seams Logic.
+2.  **Step 2.4.B (Green) [x]:** Implement Seams Logic.
     *   *Action:* Implement `SuggestSeams` in `neo4j.go` using `gds` or fallback logic.
     *   *Verify:* Run integration test.
 

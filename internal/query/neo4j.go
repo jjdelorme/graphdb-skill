@@ -286,8 +286,51 @@ func (p *Neo4jProvider) GetGlobals(nodeID string) (*GlobalUsageResult, error) {
 	}, nil
 }
 
-// SuggestSeams suggests architectural seams (clusters).
-func (p *Neo4jProvider) SuggestSeams() (*SeamResult, error) {
-	// TODO: Implement in Phase 2.4+
-	return nil, nil
+// GetSeams suggests architectural seams (boundaries) where contamination stops.
+func (p *Neo4jProvider) GetSeams(modulePattern string) ([]*SeamResult, error) {
+	query := `
+		MATCH (caller:Function {ui_contaminated: true})-[:CALLS]->(f:Function {ui_contaminated: false})-[:DEFINED_IN]->(file:File)
+		WHERE file.file =~ $pattern
+		RETURN DISTINCT f.label as seam, file.file as file, f.risk_score as risk
+		ORDER BY f.risk_score DESC
+		LIMIT 20
+	`
+
+	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
+		"pattern": modulePattern,
+	}, neo4j.EagerResultTransformer)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute GetSeams query: %w", err)
+	}
+
+	seams := make([]*SeamResult, 0, len(result.Records))
+	for _, record := range result.Records {
+		seam, _, err := neo4j.GetRecordValue[string](record, "seam")
+		if err != nil {
+			continue
+		}
+		file, _, _ := neo4j.GetRecordValue[string](record, "file")
+		
+		var risk float64
+		// risk_score might be nil or integer or float. Handle safely.
+		if riskVal, ok := record.Get("risk"); ok && riskVal != nil {
+			switch v := riskVal.(type) {
+			case float64:
+				risk = v
+			case int64:
+				risk = float64(v)
+			case int:
+				risk = float64(v)
+			}
+		}
+
+		seams = append(seams, &SeamResult{
+			Seam: seam,
+			File: file,
+			Risk: risk,
+		})
+	}
+
+	return seams, nil
 }
