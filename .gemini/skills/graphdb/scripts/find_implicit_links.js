@@ -1,58 +1,56 @@
-const neo4jService = require('./Neo4jService');
-const VectorService = require('./services/VectorService');
-const { program } = require('commander');
+const { execSync } = require('child_process');
+const path = require('path');
 
-const INDEX_NAME = 'function_embeddings';
+// Paths
+const ROOT_DIR = path.resolve(__dirname, '../../../../');
+const BIN_PATH = path.join(ROOT_DIR, 'bin/graphdb');
 
-program
-    .version('1.0.0')
-    .requiredOption('-q, --query <text>', 'Natural language query or code snippet')
-    .option('-l, --limit <number>', 'Number of results', '5')
-    .parse(process.argv);
+async function main() {
+    const args = process.argv.slice(2);
+    
+    // Helper to find flag values
+    const getVal = (flag) => {
+        const idx = args.indexOf(flag);
+        if (idx !== -1 && args[idx+1]) return args[idx+1];
+        return null;
+    };
 
-const options = program.opts();
+    const query = getVal('--query') || getVal('-q');
+    const limit = getVal('--limit') || getVal('-l') || '5';
 
-async function run() {
-    const session = neo4jService.getSession();
-    const vectorService = new VectorService();
+    if (!query) {
+        console.error("Usage: node find_implicit_links.js --query <text>");
+        process.exit(1);
+    }
+
+    let goArgs = ['query', '--type', 'search-similar', '--target', `"${query}"`, '--limit', limit];
 
     try {
-        console.log(`Generating embedding for: "${options.query}"`);
-        const vectors = await vectorService.embedDocuments([options.query]);
-        const queryVector = vectors[0];
-
-        if (!queryVector) {
-            console.error("Failed to generate embedding for query.");
-            process.exit(1);
-        }
-
-        console.log("Searching graph...");
-        
-        // Vector Search Query
-        const result = await session.run(`
-            CALL db.index.vector.queryNodes('${INDEX_NAME}', ${parseInt(options.limit)}, $queryVector)
-            YIELD node, score
-            RETURN node.label as name, node.file as file, node.start_line as line, score
-        `, { queryVector });
-
-        console.log('\n--- Search Results ---');
-        result.records.forEach(r => {
-            const score = r.get('score');
-            const name = r.get('name');
-            const file = r.get('file');
-            const line = r.get('line');
-            
-            console.log(`[${(score * 100).toFixed(1)}%] ${name}`);
-            console.log(`       File: ${file}:${line}`);
+        const output = execSync(`"${BIN_PATH}" ${goArgs.join(' ')}`, { 
+            encoding: 'utf8',
+            cwd: ROOT_DIR 
         });
+        
+        const results = JSON.parse(output);
+        
+        console.log('\n--- Search Results ---');
+        if (Array.isArray(results)) {
+            results.forEach(r => {
+                const node = r.node;
+                const score = r.score;
+                const name = node.label || node.properties.name || node.id;
+                const file = node.properties.file_path || node.properties.file || 'unknown';
+                const line = node.properties.start_line || 0;
+                
+                console.log(`[${(score * 100).toFixed(1)}%] ${name}`);
+                console.log(`       File: ${file}:${line}`);
+            });
+        }
         console.log('----------------------');
-
     } catch (e) {
-        console.error("Search failed:", e);
-    } finally {
-        await session.close();
-        await neo4jService.close();
+        console.error("Search failed:", e.message);
+        process.exit(1);
     }
 }
 
-run();
+main().catch(console.error);

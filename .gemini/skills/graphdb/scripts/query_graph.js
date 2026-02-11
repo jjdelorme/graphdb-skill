@@ -1,363 +1,86 @@
-const { Command } = require('commander');
-const neo4jService = require('./Neo4jService');
-const { syncGraph } = require('./sync_graph');
-const ClusterService = require('./services/ClusterService');
+const { execSync } = require('child_process');
+const path = require('path');
+const fs = require('fs');
 
-const queries = {
-    'suggest-seams': async (session, params) => {
-        const module = params.module || '.*';
-        const targetK = params.k ? parseInt(params.k, 10) : undefined;
-
-        // 1. Fetch functions and their embeddings
-        const result = await session.run(`
-            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
-            WHERE file.file =~ $pattern AND f.embedding IS NOT NULL
-            RETURN f.label as name, f.embedding as embedding, file.file as file
-        `, { pattern: `.*${module}.*` });
-
-        if (result.records.length === 0) {
-            return { error: 'No functions with embeddings found for pattern: ' + module };
-        }
-
-        const data = result.records.map(r => ({
-            name: r.get('name'),
-            embedding: r.get('embedding'),
-            file: r.get('file')
-        }));
-
-        // 2. Perform Clustering
-        const vectors = data.map(d => d.embedding);
-        const clusterResult = ClusterService.cluster(vectors, targetK);
-
-        // 3. Group results
-        const clusters = {};
-        for (let i = 0; i < data.length; i++) {
-            const clusterId = clusterResult.clusters[i];
-            if (!clusters[clusterId]) clusters[clusterId] = [];
-            clusters[clusterId].push({
-                name: data[i].name,
-                file: data[i].file
-            });
-        }
-
-        return {
-            pattern: module,
-            k: clusterResult.k,
-            silhouette_score: clusterResult.score,
-            clusters: Object.entries(clusters).map(([id, members]) => ({
-                id: parseInt(id, 10),
-                member_count: members.length,
-                members: members.slice(0, 10), // Limit members in output for readability
-                representative_members: members.slice(0, 3).map(m => m.name)
-            }))
-        };
-    },
-    'debug-files': async (session, params) => {
-        const result = await session.run(`
-            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
-            RETURN file.file as file, count(f) as total, sum(CASE WHEN f.embedding IS NOT NULL THEN 1 ELSE 0 END) as embedded
-            ORDER BY embedded DESC
-            LIMIT 20
-        `);
-        return result.records.map(r => r.toObject());
-    },
-    'ui-contamination': async (session, params) => {
-        const module = params.module || '.*';
-        const result = await session.run(`
-            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
-            WHERE file.file =~ $pattern
-            RETURN 
-                count(f) as total,
-                sum(CASE WHEN f.ui_contaminated THEN 1 ELSE 0 END) as contaminated,
-                sum(CASE WHEN f.pure_business_logic THEN 1 ELSE 0 END) as pure
-        `, { pattern: `.*${module}.*` });
-        return result.records[0].toObject();
-    },
-    'globals': async (session, params) => {
-        // Mode 1: Function Transitive Analysis (Downstream)
-        if (params.function) {
-            const depth = params.depth ? `0..${params.depth}` : '0..';
-            const result = await session.run(`
-                MATCH (root:Function {label: $func})
-                MATCH (root)-[:CALLS*${depth}]->(descendant:Function)
-                MATCH (descendant)-[:USES_GLOBAL]->(g:Global)
-                RETURN DISTINCT g.label as global, g.file as file, collect(DISTINCT descendant.label) as used_by
-                ORDER BY global
-            `, { func: params.function });
-            
-            return result.records.map(r => {
-                const users = r.get('used_by');
-                return {
-                    global: r.get('global'),
-                    defined_in: r.get('file'),
-                    usage_count: users.length,
-                    // If the only user is the root itself, say "Direct", else show sample
-                    used_by: users.length === 1 && users[0] === params.function 
-                        ? 'Direct Usage' 
-                        : users.slice(0, 5)
-                };
-            });
-        } 
-        
-        // Mode 2: Module Analysis (Direct Usage in File)
-        const module = params.module || '.*';
-        const result = await session.run(`
-            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
-            WHERE file.file =~ $pattern
-            MATCH (f)-[r:USES_GLOBAL]->(g:Global)
-            RETURN f.label as function, type(r) as access, g.label as global, file.file as file
-            LIMIT 100
-        `, { pattern: `.*${module}.*` });
-        return result.records.map(r => r.toObject());
-    },
-    'seams': async (session, params) => {
-        const module = params.module || '.*';
-        const result = await session.run(`
-            MATCH (caller:Function {ui_contaminated: true})-[:CALLS]->(f:Function {ui_contaminated: false})-[:DEFINED_IN]->(file:File)
-            WHERE file.file =~ $pattern
-            RETURN DISTINCT f.label as seam, file.file as file, f.risk_score as risk
-            ORDER BY f.risk_score DESC
-            LIMIT 20
-        `, { pattern: `.*${module}.*` });
-        return result.records.map(r => r.toObject());
-    },
-    'hotspots': async (session, params) => {
-        const module = params.module || '.*';
-        const result = await session.run(`
-            MATCH (f:Function)-[:DEFINED_IN]->(file:File)
-            WHERE file.file =~ $pattern AND f.risk_score IS NOT NULL
-            RETURN f.label as name, f.risk_score as risk, file.file as file
-            ORDER BY f.risk_score DESC
-            LIMIT 20
-        `, { pattern: `.*${module}.*` });
-        return result.records.map(r => r.toObject());
-    },
-    'co-change': async (session, params) => {
-        const file = params.file;
-        if (!file) return { error: 'Missing file parameter' };
-        const result = await session.run(`
-            MATCH (f1:File {file: $file})-[r:CO_CHANGED_WITH]-(f2:File)
-            RETURN f2.file as co_changed_file, r.count as count
-            ORDER BY r.count DESC
-        `, { file });
-        return result.records.map(r => r.toObject());
-    },
-    'impact': async (session, params) => {
-        const func = params.function;
-        if (!func) return { error: 'Missing function parameter' };
-        
-        // Use provided depth or default to 1..5 (more robust default than 1..3)
-        const depth = params.depth ? `1..${params.depth}` : '1..5';
-        
-        const result = await session.run(`
-            MATCH (caller:Function)-[:CALLS*${depth}]->(f:Function {label: $func})
-            RETURN DISTINCT caller.label as caller, caller.ui_contaminated as contaminated
-        `, { func });
-        return result.records.map(r => r.toObject());
-    },
-    'test-context': async (session, params) => {
-        const func = params.function;
-        if (!func) return { error: 'Missing function parameter' };
-
-        // Check existence first
-        const check = await session.run(`MATCH (f:Function {label: $func}) RETURN f`, { func });
-        if (check.records.length === 0) {
-            console.error(`Function '${func}' not found in graph.`);
-            return [];
-        }
-
-        const depth = parseInt(params.depth || "1", 10);
-
-        const query = `
-            MATCH (f:Function {label: $func})
-            
-            // 1. Direct & Transitive Globals
-            OPTIONAL MATCH path = (f)-[:CALLS*0..${depth}]->(callee)-[:USES_GLOBAL]->(g:Global)
-            WITH f, collect(DISTINCT {
-                dependency: g.label, 
-                type: 'Global', 
-                via: [n in nodes(path) WHERE n.label <> $func | n.label]
-            }) as globals
-
-            // 2. Direct Function Calls (Always kept shallow for context mocking)
-            MATCH (f)-[:CALLS]->(d:Function)
-            WITH globals, collect(DISTINCT {dependency: d.label, type: 'Function', labels: labels(d)}) as funcs
-            
-            RETURN globals + funcs as dependencies
-        `;
-
-        const result = await session.run(query, { func });
-        
-        // Flatten output for cleaner JSON
-        const raw = result.records[0].get('dependencies');
-        return raw.map(item => {
-            if (item.type === 'Global' && item.via.length === 0) {
-                 // Direct dependency
-                 delete item.via; 
-            }
-            return item;
-        });
-    },
-    'hybrid-context': async (session, params) => {
-        const func = params.function;
-        if (!func) return { error: 'Missing function parameter' };
-
-        // 1. Structural Dependencies
-        const structuralResult = await session.run(`
-            MATCH (f:Function {label: $func})
-            OPTIONAL MATCH (f)-[:CALLS]->(callee:Function)
-            OPTIONAL MATCH (caller:Function)-[:CALLS]->(f)
-            RETURN 
-                collect(DISTINCT callee.label) as callees,
-                collect(DISTINCT caller.label) as callers
-        `, { func });
-        
-        const structural = structuralResult.records.length > 0 
-            ? structuralResult.records[0].toObject() 
-            : { callees: [], callers: [] };
-
-        // 2. Semantic Neighbors
-        // We first find the target embedding, then query for similar nodes
-        const semanticResult = await session.run(`
-            MATCH (target:Function {label: $func})
-            WHERE target.embedding IS NOT NULL
-            CALL db.index.vector.queryNodes('function_embeddings', 5, target.embedding)
-            YIELD node, score
-            WHERE node.label <> $func
-            RETURN node.label as name, score, node.file as file
-        `, { func });
-        
-        const semantic = semanticResult.records.map(r => ({
-            name: r.get('name'),
-            score: r.get('score'),
-            file: r.get('file')
-        }));
-
-        return {
-            function: func,
-            structural_dependencies: structural,
-            semantic_related: semantic
-        };
-    },
-    'extract-service': async (session, params) => {
-        const module = params.module || '.*';
-        const result = await session.run(`
-            MATCH (f:Function {ui_contaminated: false})-[:DEFINED_IN]->(file:File)
-            WHERE file.file =~ $pattern
-            OPTIONAL MATCH (caller)-[:CALLS]->(f)
-            WITH f, file, count(caller) as call_count
-            RETURN f.label as name, file.file as file, f.risk_score as risk, call_count
-            ORDER BY call_count DESC, f.risk_score DESC
-            LIMIT 20
-        `, { pattern: `.*${module}.*` });
-        return result.records.map(r => r.toObject());
-    },
-    'progress': async (session, params) => {
-        const result = await session.run(`
-            MATCH (f:Function)
-            RETURN 
-                count(f) as total,
-                sum(CASE WHEN f.ui_contaminated THEN 1 ELSE 0 END) as contaminated,
-                sum(CASE WHEN f.pure_business_logic THEN 1 ELSE 0 END) as pure,
-                sum(CASE WHEN f.risk_score > 1000 THEN 1 ELSE 0 END) as high_risk
-        `);
-        return result.records[0].toObject();
-    },
-    'function': async (session, params) => {
-        const func = params.function;
-        if (!func) return { error: 'Missing function parameter' };
-        const result = await session.run(`
-            MATCH (f:Function {label: $func})
-            OPTIONAL MATCH (f)-[:DEFINED_IN]->(file:File)
-            RETURN f as function, file.file as file
-        `, { func });
-        return result.records.map(r => {
-            const props = r.get('function').properties;
-            const { embedding, ...cleanProps } = props;
-            return {
-                ...cleanProps,
-                file: r.get('file')
-            };
-        });
-    },
-    'analyze-state': async (session, params) => {
-        const func = params.function;
-        if (!func) return { error: 'Missing function parameter' };
-        
-        // Return usages of globals
-        const result = await session.run(`
-            MATCH (f:Function {label: $func})
-            OPTIONAL MATCH (f)-[:USES_GLOBAL]->(g:Global)
-            RETURN g.label as name, g.type as type, g.file as defined_in
-        `, { func });
-        
-        const state = {
-            Globals: [],
-            FileStatics: [], // Placeholders for future refinement
-            Constants: []
-        };
-        
-        result.records.forEach(r => {
-            const name = r.get('name');
-            if (name) {
-                state.Globals.push({ name, file: r.get('defined_in') });
-            }
-        });
-        
-        return state;
-    }
-};
+// Paths
+const ROOT_DIR = path.resolve(__dirname, '../../../../');
+const BIN_PATH = path.join(ROOT_DIR, 'bin/graphdb');
 
 async function main() {
-    const program = new Command();
+    // 0. Auto-Sync Check (Optional: Delegate to Go later)
+    // For now, if sync_graph.js exists, we could call it, but 
+    // to be truly "Strangler Fig", we should eventually have Go handle it.
+    // Keeping it simple for the first pass.
 
-    program
-        .name('query_graph')
-        .description('CLI to query the Neo4j graph for code analysis')
-        .version('1.0.0');
+    const args = process.argv.slice(2);
+    if (args.length === 0) {
+        console.error("Usage: node query_graph.js <query_type> [options]");
+        process.exit(1);
+    }
 
-    // Global options
-    program
-        .option('-m, --module <pattern>', 'Module regex pattern', '.*')
-        .option('-f, --function <name>', 'Function name')
-        .option('-F, --file <path>', 'File path')
-        .option('-k, --k <number>', 'Cluster count')
-        .option('-d, --depth <number>', 'Traversal depth');
+    const queryType = args[0];
+    const remainingArgs = args.slice(1);
 
-    // Argument for query type
-    program
-        .argument('<query_type>', 'Type of query to run')
-        .action(async (queryType, options) => {
-            // 0. Auto-Sync Check
-            await syncGraph();
+    // Map Query Types to Go Query Types
+    // Go supports: search-features, search-similar, hybrid-context, neighbors, impact, globals, seams
+    const typeMap = {
+        'suggest-seams': 'seams',
+        'seams': 'seams',
+        'impact': 'impact',
+        'globals': 'globals',
+        'test-context': 'neighbors',
+        'hybrid-context': 'hybrid-context',
+        'neighbors': 'neighbors',
+        'function': 'neighbors', // Close enough for now, or add specific 'function' type to Go
+    };
 
-            if (!queries[queryType]) {
-                console.error(`Unknown query type: ${queryType}`);
-                console.error('Available queries:', Object.keys(queries).join(', '));
-                process.exit(1);
-            }
+    const goType = typeMap[queryType] || queryType;
 
-            const session = neo4jService.getSession();
-            try {
-                // Merge options into params
-                const params = { ...options };
-                const result = await queries[queryType](session, params);
-                
-                console.log(JSON.stringify(result, (key, value) => {
-                    if (typeof value === 'bigint') return value.toString();
-                    if (value && typeof value.toNumber === 'function') return value.toNumber();
-                    return value;
-                }, 2));
-            } catch (error) {
-                console.error('Query Error:', error);
-                process.exit(1);
-            } finally {
-                await session.close();
-                await neo4jService.close();
-            }
+    let goArgs = ['query', '--type', goType];
+
+    // Helper to find flag values in remainingArgs
+    const getVal = (flag) => {
+        const idx = remainingArgs.indexOf(flag);
+        if (idx !== -1 && remainingArgs[idx+1]) return remainingArgs[idx+1];
+        return null;
+    };
+
+    const target = getVal('--function') || getVal('-f') || getVal('--module') || getVal('-m') || getVal('--file') || getVal('-F');
+    if (target) {
+        goArgs.push('--target', target);
+    }
+
+    const depth = getVal('--depth') || getVal('-d');
+    if (depth) {
+        goArgs.push('--depth', depth);
+    }
+
+    const k = getVal('--k') || getVal('-k');
+    if (k) {
+        goArgs.push('--limit', k); // Mapping k to limit for seams
+    }
+
+    // Module pattern specifically for seams
+    const module = getVal('--module') || getVal('-m');
+    if (module) {
+        goArgs.push('--module', module);
+    }
+
+    // Execute
+    try {
+        const output = execSync(`"${BIN_PATH}" ${goArgs.join(' ')}`, { 
+            encoding: 'utf8',
+            cwd: ROOT_DIR 
         });
-
-    program.parse(process.argv);
+        // The Go binary already outputs JSON to stdout
+        console.log(output);
+    } catch (e) {
+        // If it failed, it might be an unknown query type in Go
+        // In that case, we might want to log a better error
+        if (e.stdout) console.log(e.stdout);
+        console.error(`Query failed: ${e.message}`);
+        process.exit(1);
+    }
 }
 
 main().catch(console.error);

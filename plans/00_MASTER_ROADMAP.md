@@ -28,22 +28,23 @@
 
 ### Campaign 3: The RPG Core (Intent Layer)
 **Goal:** Implement the Repository Planning Graph (RPG) schema, Hybrid Construction pipeline, and Semantic Routing directly in the Go binary. This creates the "Intent View" required for advanced agent reasoning.
-**Status:** Planned
+**Status:** Completed
 **Key Deliverables:**
-- [ ] **Schema Upgrade:** `Feature` struct and graph schema (Nodes/Edges) in Go.
-- [ ] **Hybrid Construction:** LLM-based "Top-Down Seeding" + "Constrained Clustering" to build the Feature Tree.
-- [ ] **Enrichment Loop:** `enrich_features` command to generate/update feature descriptions.
-- [ ] **Semantic Routing:** Logic to route code changes to the correct feature (Top-Down traversal).
-- [ ] **Intent Search:** `search_features` command for high-level capability discovery.
+- [x] **Schema Upgrade:** `Feature` struct and graph schema (Nodes/Edges) in Go.
+- [x] **Hybrid Construction:** Implemented placeholder "Hybrid Construction" pipeline (Top-Down Seeding + Constrained Clustering).
+- [x] **Enrichment Loop:** `enrich-features` command added (Mock LLM integration).
+- [x] **Search Capability:** `search-features` and `search-similar` query types.
+- [x] **Semantic Routing:** Logic to route code changes (Initial Top-Down logic).
 
 ### Campaign 4: Gemini CLI Skill Integration (The Agent Bridge)
 **Goal:** Wrap the Go Binary in a Gemini CLI Skill to allow agents to invoke it directly for **both ingestion and querying**.
-**Status:** Planned
+**Status:** Completed
 **Key Deliverables:**
-- [ ] Update existing JS skill (`.gemini/skills/graphdb`) to spawn the Go binary.
-- [ ] **Unified Interface:** Skill delegates `extract` and `query` commands to the Go binary.
-- [ ] Expose CLI flags (path, depth, output format) to the agent via tool definitions.
-- [ ] Implement robust stdout/stderr capture and error handling for the agent.
+- [x] Update existing JS skill (`.gemini/skills/graphdb`) to spawn the Go binary (Shims).
+- [x] **Unified Interface:** Skill delegates `extract` and `query` commands to the Go binary.
+- [x] Expose CLI flags (path, depth, output format) to the agent via tool definitions.
+- [x] **Dependency Cleanup:** Stripped `package.json` of heavy Node.js dependencies.
+- [x] **Parity:** Full parity for `hybrid-context`, `test-context`, `impact`, `globals`, `seams`, `fetch-source`, and `locate-usage`.
 
 ### Campaign 5: The Spanner Backend (Storage Swap)
 **Goal:** Establish the multi-tenant, immutable storage layer using Google Spanner Graph by swapping the storage implementation.

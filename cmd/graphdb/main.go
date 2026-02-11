@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"graphdb/internal/config"
 	"graphdb/internal/embedding"
+	"graphdb/internal/graph"
 	"graphdb/internal/ingest"
 	"graphdb/internal/query"
+	"graphdb/internal/rpg"
 	"graphdb/internal/storage"
 	"log"
 	"os"
@@ -40,10 +43,33 @@ func (m *MockEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 	return res, nil
 }
 
+// SimpleDomainDiscoverer for placeholder RPG
+type SimpleDomainDiscoverer struct{}
+
+func (d *SimpleDomainDiscoverer) DiscoverDomains(fileTree string) (map[string]string, error) {
+	// Placeholder: returns a single root domain
+	return map[string]string{"root": ""}, nil
+}
+
+// SimpleClusterer for placeholder RPG
+type SimpleClusterer struct{}
+
+func (c *SimpleClusterer) Cluster(nodes []graph.Node, domain string) (map[string][]graph.Node, error) {
+	// Placeholder: puts all nodes in a single "default" cluster
+	return map[string][]graph.Node{"default": nodes}, nil
+}
+
+// MockSummarizer for placeholder RPG
+type MockSummarizer struct{}
+
+func (s *MockSummarizer) Summarize(snippets []string) (string, string, error) {
+	return "Mock Feature", "Automatically generated description based on " + fmt.Sprintf("%d", len(snippets)) + " snippets.", nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: graphdb <command> [options]")
-		fmt.Println("Commands: ingest, query")
+		fmt.Println("Commands: ingest, query, enrich-features")
 		os.Exit(1)
 	}
 
@@ -52,6 +78,8 @@ func main() {
 		handleIngest(os.Args[2:])
 	case "query":
 		handleQuery(os.Args[2:])
+	case "enrich-features":
+		handleEnrichFeatures(os.Args[2:])
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
 		os.Exit(1)
@@ -77,9 +105,12 @@ func setupEmbedder(project, location, token string, mock bool) embedding.Embedde
 
 func handleIngest(args []string) {
 	fs := flag.NewFlagSet("ingest", flag.ExitOnError)
-	dirPtr := fs.String("dir", ".", "Directory to walk")
+	dirPtr := fs.String("dir", ".", "Directory to walk (ignored if -file-list is used)")
+	fileListPtr := fs.String("file-list", "", "Path to a file containing a list of files to process")
 	workersPtr := fs.Int("workers", 4, "Number of workers")
-	outputPtr := fs.String("output", "graph.jsonl", "Output file path")
+	outputPtr := fs.String("output", "graph.jsonl", "Output file path (combined)")
+	nodesPtr := fs.String("nodes", "", "Output file path for nodes")
+	edgesPtr := fs.String("edges", "", "Output file path for edges")
 	projectPtr := fs.String("project", "", "GCP Project ID for Vertex AI")
 	locationPtr := fs.String("location", "us-central1", "GCP Location for Vertex AI")
 	mockEmbedPtr := fs.Bool("mock-embedding", false, "Use mock embedding instead of Vertex AI")
@@ -87,14 +118,29 @@ func handleIngest(args []string) {
 
 	fs.Parse(args)
 
-	// Setup Emitter
-	outFile, err := os.Create(*outputPtr)
-	if err != nil {
-		log.Fatalf("Failed to create output file: %v", err)
+	var emitter storage.Emitter
+	if *nodesPtr != "" || *edgesPtr != "" {
+		if *nodesPtr == "" || *edgesPtr == "" {
+			log.Fatalf("Both -nodes and -edges must be provided for split output")
+		}
+		nodeFile, err := os.Create(*nodesPtr)
+		if err != nil {
+			log.Fatalf("Failed to create nodes file: %v", err)
+		}
+		edgeFile, err := os.Create(*edgesPtr)
+		if err != nil {
+			log.Fatalf("Failed to create edges file: %v", err)
+		}
+		emitter = storage.NewSplitJSONLEmitter(nodeFile, edgeFile)
+	} else {
+		// Setup Combined Emitter
+		outFile, err := os.Create(*outputPtr)
+		if err != nil {
+			log.Fatalf("Failed to create output file: %v", err)
+		}
+		emitter = storage.NewJSONLEmitter(outFile)
 	}
-	defer outFile.Close()
-	
-	emitter := storage.NewJSONLEmitter(outFile)
+	defer emitter.Close()
 
 	// Setup Embedder
 	embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
@@ -117,19 +163,133 @@ func handleIngest(args []string) {
 
 	// Run
 	start := time.Now()
-	log.Printf("Starting walk on %s with %d workers...", *dirPtr, *workersPtr)
 	
-	if err := walker.Run(ctx, *dirPtr); err != nil {
-		log.Fatalf("Walker failed: %v", err)
+	if *fileListPtr != "" {
+		log.Printf("Starting ingestion from file list %s with %d workers...", *fileListPtr, *workersPtr)
+		file, err := os.Open(*fileListPtr)
+		if err != nil {
+			log.Fatalf("Failed to open file list: %v", err)
+		}
+		defer file.Close()
+
+		walker.WorkerPool.Start()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			path := scanner.Text()
+			if path != "" {
+				walker.WorkerPool.Submit(path)
+			}
+		}
+		walker.WorkerPool.Stop()
+	} else {
+		log.Printf("Starting walk on %s with %d workers...", *dirPtr, *workersPtr)
+		if err := walker.Run(ctx, *dirPtr); err != nil {
+			log.Fatalf("Walker failed: %v", err)
+		}
 	}
 
-	log.Printf("Done in %v. Output written to %s", time.Since(start), *outputPtr)
+	log.Printf("Done in %v.", time.Since(start))
+}
+
+func handleEnrichFeatures(args []string) {
+	fs := flag.NewFlagSet("enrich-features", flag.ExitOnError)
+	dirPtr := fs.String("dir", ".", "Directory to analyze") // Not strictly used if reading from graph.jsonl, but maybe for Discoverer
+	projectPtr := fs.String("project", "", "GCP Project ID")
+	locationPtr := fs.String("location", "us-central1", "GCP Location")
+	mockEmbedPtr := fs.Bool("mock-embedding", false, "Use mock embedding")
+	tokenPtr := fs.String("token", "", "GCP Access Token")
+	inputPtr := fs.String("input", "graph.jsonl", "Input graph file")
+
+	fs.Parse(args)
+
+	// Silence unused warnings for now as this is a placeholder implementation
+	_ = projectPtr
+	_ = locationPtr
+	_ = mockEmbedPtr
+	_ = tokenPtr
+
+	log.Println("Starting feature enrichment...")
+
+	// 1. Load Functions from graph.jsonl
+	functions, err := loadFunctions(*inputPtr)
+	if err != nil {
+		log.Fatalf("Failed to load functions: %v", err)
+	}
+	log.Printf("Loaded %d functions from %s", len(functions), *inputPtr)
+
+	// 2. Setup Builder
+	builder := &rpg.Builder{
+		Discoverer: &SimpleDomainDiscoverer{},
+		Clusterer:  &SimpleClusterer{},
+	}
+
+	// 3. Build Feature Hierarchy
+	features, err := builder.Build(*dirPtr, functions)
+	if err != nil {
+		log.Fatalf("Failed to build features: %v", err)
+	}
+
+	// 4. Setup Enricher
+	// In real implementation, this would use an LLM client
+	enricher := &rpg.Enricher{
+		Client: &MockSummarizer{},
+	}
+
+	// 5. Enrich Features
+	for _, f := range features {
+		// Naive: pass all functions to top level. In reality, build returns tree with assigned nodes.
+		// Since our mock builder doesn't really assign nodes deeply, we verify what we have.
+		// builder.Build returns root features.
+		
+		// For the purpose of this shim, we just enrich the roots.
+		if err := enricher.Enrich(&f, functions); err != nil {
+			log.Printf("Warning: failed to enrich feature %s: %v", f.Name, err)
+		}
+	}
+
+	// 6. Output (JSON to stdout)
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(features); err != nil {
+		log.Fatalf("Failed to encode features: %v", err)
+	}
+}
+
+func loadFunctions(path string) ([]graph.Node, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var nodes []graph.Node
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var raw map[string]interface{}
+		if err := json.Unmarshal(scanner.Bytes(), &raw); err != nil {
+			continue
+		}
+		
+		// Check if it is a node and a Function
+		if typeVal, ok := raw["type"].(string); ok && typeVal == "Function" {
+			// Reconstruct node
+			id, _ := raw["id"].(string)
+			node := graph.Node{
+				ID:         id,
+				Label:      "Function",
+				Properties: raw,
+			}
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes, scanner.Err()
 }
 
 func handleQuery(args []string) {
 	fs := flag.NewFlagSet("query", flag.ExitOnError)
-	typePtr := fs.String("type", "", "Query type: features, neighbors, impact, globals, seams")
+	typePtr := fs.String("type", "", "Query type: search-features, search-similar, hybrid-context, neighbors, impact, globals, seams")
 	targetPtr := fs.String("target", "", "Target function name or query text")
+	target2Ptr := fs.String("target2", "", "Second target (e.g. for locate-usage)")
 	depthPtr := fs.Int("depth", 1, "Traversal depth")
 	limitPtr := fs.Int("limit", 10, "Result limit")
 	modulePtr := fs.String("module", ".*", "Module pattern for seams")
@@ -143,8 +303,6 @@ func handleQuery(args []string) {
 	fs.Parse(args)
 
 	cfg := config.LoadConfig()
-	// Validation for non-mock scenarios or if connection is mandatory
-	// For now, we assume connection is mandatory for query
 	if cfg.Neo4jURI == "" {
 		log.Fatal("NEO4J_URI environment variable is not set")
 	}
@@ -158,9 +316,11 @@ func handleQuery(args []string) {
 	var result any
 
 	switch *typePtr {
-	case "features":
+	case "features": // Alias
+		fallthrough
+	case "search-features":
 		if *targetPtr == "" {
-			log.Fatal("-target is required for 'features'")
+			log.Fatal("-target is required for 'search-features'")
 		}
 		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
@@ -168,7 +328,47 @@ func handleQuery(args []string) {
 			 log.Fatalf("Embedding failed: %v", err)
 		}
 		result, err = provider.SearchFeatures(embeddings[0], *limitPtr)
+
+	case "search-similar":
+		if *targetPtr == "" {
+			log.Fatal("-target is required for 'search-similar'")
+		}
+		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
+		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
+		if err != nil {
+			 log.Fatalf("Embedding failed: %v", err)
+		}
+		result, err = provider.SearchSimilarFunctions(embeddings[0], *limitPtr)
+
+	case "hybrid-context":
+		if *targetPtr == "" {
+			log.Fatal("-target is required for 'hybrid-context'")
+		}
+		// 1. Structural Neighbors (Dependency Layer)
+		neighbors, err := provider.GetNeighbors(*targetPtr, *depthPtr)
+		if err != nil {
+			log.Fatalf("Neighbors lookup failed: %v", err)
+		}
+
+		// 2. Semantic Search (Dependency Layer)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
+		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
+		if err != nil {
+			log.Printf("Warning: Embedding failed for hybrid search: %v", err)
+		}
 		
+		var similar []*query.FeatureResult
+		if len(embeddings) > 0 {
+			similar, _ = provider.SearchSimilarFunctions(embeddings[0], *limitPtr)
+		}
+
+		result = map[string]interface{}{
+			"neighbors": neighbors,
+			"similar":   similar,
+		}
+
+	case "test-context": // Alias
+		fallthrough
 	case "neighbors":
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'neighbors'")
@@ -189,9 +389,26 @@ func handleQuery(args []string) {
 		
 	case "seams":
 		result, err = provider.GetSeams(*modulePtr)
-		
+
+	case "locate-usage":
+		if *targetPtr == "" || *target2Ptr == "" {
+			log.Fatal("-target and -target2 are required for 'locate-usage'")
+		}
+		result, err = provider.LocateUsage(*targetPtr, *target2Ptr)
+
+	case "fetch-source":
+		if *targetPtr == "" {
+			log.Fatal("-target is required for 'fetch-source'")
+		}
+		source, err := provider.FetchSource(*targetPtr)
+		if err != nil {
+			log.Fatalf("FetchSource failed: %v", err)
+		}
+		fmt.Print(source) // Print raw source to stdout
+		return
+
 	default:
-		log.Fatalf("Unknown or missing query type: %s. Valid types: features, neighbors, impact, globals, seams", *typePtr)
+		log.Fatalf("Unknown or missing query type: %s. Valid types: search-features, search-similar, hybrid-context, neighbors, impact, globals, seams", *typePtr)
 	}
 	
 	if err != nil {

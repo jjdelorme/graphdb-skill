@@ -1,10 +1,13 @@
 package query
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"graphdb/internal/config"
 	"graphdb/internal/graph"
+	"os"
+	"strings"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
@@ -378,3 +381,123 @@ func (p *Neo4jProvider) GetSeams(modulePattern string) ([]*SeamResult, error) {
 
 	return seams, nil
 }
+
+// FetchSource retrieves the source code for a node.
+func (p *Neo4jProvider) FetchSource(nodeID string) (string, error) {
+	query := `
+		MATCH (n) WHERE n.id = $id OR n.label = $id
+		RETURN n.file as file, n.start_line as start, n.end_line as end
+	`
+	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
+		"id": nodeID,
+	}, neo4j.EagerResultTransformer)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to query source info: %w", err)
+	}
+
+	if len(result.Records) == 0 {
+		return "", fmt.Errorf("node not found: %s", nodeID)
+	}
+
+	record := result.Records[0]
+	file, _, _ := neo4j.GetRecordValue[string](record, "file")
+	start, _, _ := neo4j.GetRecordValue[int64](record, "start")
+	end, _, _ := neo4j.GetRecordValue[int64](record, "end")
+
+	if file == "" {
+		return "", fmt.Errorf("node %s has no file associated", nodeID)
+	}
+
+	// Read file
+	f, err := os.Open(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file %s: %w", file, err)
+	}
+	defer f.Close()
+
+	if start == 0 && end == 0 {
+		// Default to first 50 lines if no line info
+		start = 1
+		end = 50
+	}
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	currentLine := int64(0)
+	for scanner.Scan() {
+		currentLine++
+		if currentLine >= start && currentLine <= end {
+			lines = append(lines, scanner.Text())
+		}
+		if currentLine > end {
+			break
+		}
+	}
+
+	return strings.Join(lines, "\n"), scanner.Err()
+}
+
+// LocateUsage identifies where a dependency is used within a function.
+func (p *Neo4jProvider) LocateUsage(sourceID string, targetID string) (any, error) {
+	query := `
+		MATCH (source) WHERE source.id = $sourceId OR source.label = $sourceId
+		MATCH (target) WHERE target.id = $targetId OR target.label = $targetId
+		RETURN source.file as file, source.start_line as start, source.end_line as end, target.name as target_name, properties(target).name as target_name_alt
+	`
+	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
+		"sourceId": sourceID,
+		"targetId": targetID,
+	}, neo4j.EagerResultTransformer)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query usage info: %w", err)
+	}
+
+	if len(result.Records) == 0 {
+		return nil, fmt.Errorf("source or target node not found")
+	}
+
+	record := result.Records[0]
+	file, _, _ := neo4j.GetRecordValue[string](record, "file")
+	start, _, _ := neo4j.GetRecordValue[int64](record, "start")
+	end, _, _ := neo4j.GetRecordValue[int64](record, "end")
+	targetName, _, _ := neo4j.GetRecordValue[string](record, "target_name")
+	if targetName == "" {
+		targetName, _, _ = neo4j.GetRecordValue[string](record, "target_name_alt")
+	}
+
+	if file == "" || start == 0 || end == 0 {
+		return nil, fmt.Errorf("source node %s missing location info", sourceID)
+	}
+
+	// Read file and slice
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file %s: %w", file, err)
+	}
+	defer f.Close()
+
+	var matches []map[string]any
+	scanner := bufio.NewScanner(f)
+	currentLine := int64(0)
+	for scanner.Scan() {
+		currentLine++
+		if currentLine >= start && currentLine <= end {
+			lineText := scanner.Text()
+			if strings.Contains(lineText, targetName) {
+				matches = append(matches, map[string]any{
+					"line":    currentLine,
+					"content": strings.TrimSpace(lineText),
+				})
+			}
+		}
+		if currentLine > end {
+			break
+		}
+	}
+
+	return matches, scanner.Err()
+}
+
+

@@ -23,6 +23,60 @@ func NewJSONLEmitter(w io.Writer) *JSONLEmitter {
 	}
 }
 
+// SplitJSONLEmitter implements Emitter for writing nodes and edges to separate files.
+type SplitJSONLEmitter struct {
+	nodeEncoder *json.Encoder
+	edgeEncoder *json.Encoder
+	nodeCloser  io.Closer
+	edgeCloser  io.Closer
+}
+
+// NewSplitJSONLEmitter creates a new SplitJSONLEmitter.
+func NewSplitJSONLEmitter(nodeW, edgeW io.Writer) *SplitJSONLEmitter {
+	s := &SplitJSONLEmitter{
+		nodeEncoder: json.NewEncoder(nodeW),
+		edgeEncoder: json.NewEncoder(edgeW),
+	}
+	if c, ok := nodeW.(io.Closer); ok {
+		s.nodeCloser = c
+	}
+	if c, ok := edgeW.(io.Closer); ok {
+		s.edgeCloser = c
+	}
+	return s
+}
+
+func (e *SplitJSONLEmitter) EmitNode(node *graph.Node) error {
+	out := make(map[string]interface{})
+	if node.Properties != nil {
+		for k, v := range node.Properties {
+			out[k] = v
+		}
+	}
+	out["id"] = node.ID
+	out["type"] = node.Label
+	return e.nodeEncoder.Encode(out)
+}
+
+func (e *SplitJSONLEmitter) EmitEdge(edge *graph.Edge) error {
+	out := map[string]string{
+		"source": edge.SourceID,
+		"target": edge.TargetID,
+		"type":   edge.Type,
+	}
+	return e.edgeEncoder.Encode(out)
+}
+
+func (e *SplitJSONLEmitter) Close() error {
+	if e.nodeCloser != nil {
+		e.nodeCloser.Close()
+	}
+	if e.edgeCloser != nil {
+		e.edgeCloser.Close()
+	}
+	return nil
+}
+
 // EmitNode writes a node to the output in the flattened JSON format required by import_to_neo4j.js.
 // Map mappings:
 // - node.ID -> "id"

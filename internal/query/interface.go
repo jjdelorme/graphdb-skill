@@ -67,4 +67,6 @@ type GraphProvider interface {
 	GetImpact(nodeID string, depth int) (*ImpactResult, error)
 	GetGlobals(nodeID string) (*GlobalUsageResult, error)
 	GetSeams(modulePattern string) ([]*SeamResult, error)
+	FetchSource(nodeID string) (string, error)
+	LocateUsage(sourceID string, targetID string) (any, error)
 }
