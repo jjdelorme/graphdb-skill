@@ -246,18 +246,16 @@ func makeVector32(dim int, val float32, idx int) []float32 {
 	return vec
 }
 
-func TestSearchFeatures(t *testing.T) {
+func TestSearchSimilarFunctions(t *testing.T) {
 	p := getProvider(t)
 	defer p.Close()
 	defer cleanup(t, p)
 
-	// We assume index 'function_embeddings' exists with 768 dimensions in the shared environment.
-	// If it doesn't, this test might fail or we should detect and skip.
-	
 	// Setup with 768 dimensions
 	v1 := makeVector(768, 1.0, 0)
 	v2 := makeVector(768, 1.0, 1)
 
+	// Note: We use 'Function' label here
 	setupQuery := `
 		CREATE (f1:Function {label: 'TestSim1', embedding: $v1})
 		CREATE (f2:Function {label: 'TestSim2', embedding: $v2})
@@ -273,6 +271,43 @@ func TestSearchFeatures(t *testing.T) {
 	// Search similar to v1 (closer to index 0)
 	queryVec := makeVector32(768, 0.9, 0) // float32 for Go input
 	
+	// Call the new method name
+	results, err := p.SearchSimilarFunctions(queryVec, 1)
+	if err != nil {
+		t.Logf("SearchSimilarFunctions failed (index might be missing): %v", err)
+		return 
+	}
+
+	if len(results) > 0 {
+		if results[0].Node.Label != "TestSim1" {
+			t.Errorf("Expected TestSim1, got %s (Score: %f)", results[0].Node.Label, results[0].Score)
+		}
+	} else {
+		t.Log("No results found (index might be building)")
+	}
+}
+
+func TestSearchFeatures(t *testing.T) {
+	p := getProvider(t)
+	defer p.Close()
+	defer cleanup(t, p)
+
+	// Setup with 768 dimensions
+	v1 := makeVector(768, 1.0, 0)
+
+	// Note: We use 'Feature' label here
+	setupQuery := `
+		CREATE (f1:Feature {id: 'feat-1', name: 'TestFeature', embedding: $v1})
+	`
+	_, err := neo4j.ExecuteQuery(p.ctx, p.driver, setupQuery, map[string]any{
+		"v1": v1,
+	}, neo4j.EagerResultTransformer)
+	if err != nil {
+		t.Fatalf("Failed to setup fixture: %v", err)
+	}
+
+	queryVec := makeVector32(768, 0.9, 0)
+	
 	results, err := p.SearchFeatures(queryVec, 1)
 	if err != nil {
 		t.Logf("SearchFeatures failed (index might be missing): %v", err)
@@ -280,8 +315,8 @@ func TestSearchFeatures(t *testing.T) {
 	}
 
 	if len(results) > 0 {
-		if results[0].Node.Label != "TestSim1" {
-			t.Errorf("Expected TestSim1, got %s (Score: %f)", results[0].Node.Label, results[0].Score)
+		if results[0].Node.ID != "feat-1" {
+			t.Errorf("Expected feat-1, got %s", results[0].Node.ID)
 		}
 	} else {
 		t.Log("No results found (index might be building)")

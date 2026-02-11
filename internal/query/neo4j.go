@@ -54,8 +54,8 @@ func (p *Neo4jProvider) Traverse(startNodeID string, relationship string, direct
 	return nil, nil
 }
 
-// SearchFeatures searches for nodes using vector embeddings and structure.
-func (p *Neo4jProvider) SearchFeatures(embedding []float32, limit int) ([]*FeatureResult, error) {
+// SearchSimilarFunctions searches for function nodes using vector embeddings.
+func (p *Neo4jProvider) SearchSimilarFunctions(embedding []float32, limit int) ([]*FeatureResult, error) {
 	query := `
 		CALL db.index.vector.queryNodes('function_embeddings', $limit, $embedding)
 		YIELD node, score
@@ -68,22 +68,66 @@ func (p *Neo4jProvider) SearchFeatures(embedding []float32, limit int) ([]*Featu
 	}, neo4j.EagerResultTransformer)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute vector search: %w", err)
+		return nil, fmt.Errorf("failed to execute vector search on functions: %w", err)
 	}
 
 	features := make([]*FeatureResult, 0, len(result.Records))
 	for _, record := range result.Records {
 		label, _, err := neo4j.GetRecordValue[string](record, "label")
 		if err != nil {
-			continue // Should not happen if query is correct
+			continue
 		}
 		score, _, _ := neo4j.GetRecordValue[float64](record, "score")
 		
 		props, _, _ := neo4j.GetRecordValue[map[string]any](record, "props")
 
-		// Reconstruct node (simplified)
+		// Reconstruct node
 		node := &graph.Node{
 			Label: label,
+			Properties: make(map[string]any),
+		}
+		for k, v := range props {
+			node.Properties[k] = v
+		}
+
+		features = append(features, &FeatureResult{
+			Node:  node,
+			Score: float32(score),
+		})
+	}
+
+	return features, nil
+}
+
+// SearchFeatures searches for Feature nodes using vector embeddings.
+func (p *Neo4jProvider) SearchFeatures(embedding []float32, limit int) ([]*FeatureResult, error) {
+	query := `
+		CALL db.index.vector.queryNodes('feature_embeddings', $limit, $embedding)
+		YIELD node, score
+		RETURN node.id as id, score, properties(node) as props
+	`
+
+	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
+		"limit":     limit,
+		"embedding": embedding,
+	}, neo4j.EagerResultTransformer)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute vector search on features: %w", err)
+	}
+
+	features := make([]*FeatureResult, 0, len(result.Records))
+	for _, record := range result.Records {
+		id, _, err := neo4j.GetRecordValue[string](record, "id")
+		if err != nil {
+			continue
+		}
+		score, _, _ := neo4j.GetRecordValue[float64](record, "score")
+		props, _, _ := neo4j.GetRecordValue[map[string]any](record, "props")
+
+		node := &graph.Node{
+			ID:    id,
+			Label: "Feature",
 			Properties: make(map[string]any),
 		}
 		for k, v := range props {
