@@ -16,12 +16,14 @@ backup_graph_data/
 temp_tools/
 
 # Go compiled binaries
-graphdb
-bin/graphdb
+/graphdb
+/bin/graphdb
 .gemini/skills/graphdb/scripts/graphdb
 
 # Dependencies
-node_modules/
+/node_modules/
+.gemini/skills/graphdb/node_modules/
+.gemini/skills/neo4j-manager/node_modules/
 
 # Environment Variables
 .env
