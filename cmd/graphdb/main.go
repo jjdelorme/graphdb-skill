@@ -57,8 +57,7 @@ func (s *MockSummarizer) Summarize(snippets []string) (string, string, error) {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: graphdb <command> [options]")
-		fmt.Println("Commands: ingest, query, enrich-features")
+		printUsage()
 		os.Exit(1)
 	}
 
@@ -71,10 +70,23 @@ func main() {
 		handleEnrichFeatures(os.Args[2:])
 	case "import":
 		handleImport(os.Args[2:])
+	case "help", "--help", "-h":
+		printUsage()
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
+		printUsage()
 		os.Exit(1)
 	}
+}
+
+func printUsage() {
+	fmt.Println("Usage: graphdb <command> [options]")
+	fmt.Println("\nCommands:")
+	fmt.Println("  ingest           Parse code and generate graph nodes/edges (JSONL)")
+	fmt.Println("  query            Query the graph (structural or semantic)")
+	fmt.Println("  enrich-features  Build the RPG (Repository Planning Graph) Intent Layer")
+	fmt.Println("  import           Import JSONL files into Neo4j")
+	fmt.Println("\nRun 'graphdb <command> --help' for command-specific options.")
 }
 
 func setupEmbedder(project, location, token string, mock bool) embedding.Embedder {

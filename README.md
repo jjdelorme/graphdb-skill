@@ -67,10 +67,10 @@ Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
 The primary tool is the `graphdb` Go binary. Build it from the project root:
 
 ```bash
-go build -o bin/graphdb cmd/graphdb/main.go
+go build -o .gemini/skills/graphdb/scripts/graphdb cmd/graphdb/main.go
 ```
 
-This produces `bin/graphdb`, which is what the Gemini CLI skill expects (see `.gemini/skills/graphdb/SKILL.md`).
+This produces `.gemini/skills/graphdb/scripts/graphdb`, which is where the Gemini CLI agent skill expects it.
 
 ## 🗄️ Neo4j Database Setup
 
@@ -90,20 +90,20 @@ To analyze a codebase, you must first ingest it into the Graph Database. Run the
 
 1.  **Extract Graph Data** (Parses source code, generates embeddings, outputs JSONL):
     ```bash
-    bin/graphdb ingest -dir <target-dir> -nodes graph_data/nodes.jsonl -edges graph_data/edges.jsonl -project $GOOGLE_CLOUD_PROJECT
+    .gemini/skills/graphdb/scripts/graphdb ingest -dir <target-dir> -nodes graph_data/nodes.jsonl -edges graph_data/edges.jsonl -project $GOOGLE_CLOUD_PROJECT
     ```
     Omit `-project` to use mock embeddings (faster, no GCP dependency).
 
 2.  **Build RPG Features** (Groups functions into semantic features using LLM):
     ```bash
-    bin/graphdb enrich-features -dir <target-dir> -input graph_data/nodes.jsonl -output graph_data/rpg.jsonl -project $GOOGLE_CLOUD_PROJECT
+    .gemini/skills/graphdb/scripts/graphdb enrich-features -dir <target-dir> -input graph_data/nodes.jsonl -output graph_data/rpg.jsonl -project $GOOGLE_CLOUD_PROJECT
     ```
     Flags: `--cluster-mode=semantic` for embedding-based clustering, `--mock-embedding` for dry runs.
 
 3.  **Import to Neo4j** (Loads JSONL into the database):
     ```bash
-    bin/graphdb import -input graph_data/nodes.jsonl -clean
-    bin/graphdb import -input graph_data/rpg.jsonl
+    .gemini/skills/graphdb/scripts/graphdb import -input graph_data/nodes.jsonl -clean
+    .gemini/skills/graphdb/scripts/graphdb import -input graph_data/rpg.jsonl
     ```
 
 ## 🔍 Usage & Analysis
@@ -112,27 +112,27 @@ The project follows a **"Graph-First"** workflow powered by the **`graphdb` Go b
 
 ### Query Commands
 
-All queries use the same pattern: `bin/graphdb query -type <type> [options]`
+All queries use the same pattern: `.gemini/skills/graphdb/scripts/graphdb query -type <type> [options]`
 
 *   **Intent-Based Search (RPG):** Find where a concept lives in the codebase.
     ```bash
-    bin/graphdb query -type search-features -target "authentication" -project $GOOGLE_CLOUD_PROJECT
+    .gemini/skills/graphdb/scripts/graphdb query -type search-features -target "authentication" -project $GOOGLE_CLOUD_PROJECT
     ```
 *   **Explore Feature Hierarchy:** Navigate the RPG domain/feature tree.
     ```bash
-    bin/graphdb query -type explore-domain -target "domain-rpg"
+    .gemini/skills/graphdb/scripts/graphdb query -type explore-domain -target "domain-rpg"
     ```
 *   **Dependency Analysis:** Determine what a function depends on.
     ```bash
-    bin/graphdb query -type neighbors -target "function_name"
+    .gemini/skills/graphdb/scripts/graphdb query -type neighbors -target "function_name"
     ```
 *   **Impact Analysis:** Find upstream callers affected by a change.
     ```bash
-    bin/graphdb query -type impact -target "function_name" -depth 3
+    .gemini/skills/graphdb/scripts/graphdb query -type impact -target "function_name" -depth 3
     ```
 *   **Hybrid Context:** Combine structural dependencies with semantic similarity.
     ```bash
-    bin/graphdb query -type hybrid-context -target "function_name" -project $GOOGLE_CLOUD_PROJECT
+    .gemini/skills/graphdb/scripts/graphdb query -type hybrid-context -target "function_name" -project $GOOGLE_CLOUD_PROJECT
     ```
 *   **Other query types:** `search-similar`, `globals`, `seams`, `fetch-source`, `locate-usage`.
 
