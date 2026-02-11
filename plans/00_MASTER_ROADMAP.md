@@ -11,7 +11,7 @@
 **Key Deliverables:**
 - [x] Standalone Go CLI (`graphdb`).
 - [x] Parallel file walker with Worker Pools.
-- [x] **Language Parity:** C#, C/C++, VB.NET, SQL, TypeScript.
+- [x] **Language Parity:** C#, C/C++, VB.NET, SQL, TypeScript, Java.
 - [x] Tree-sitter integration via CGO.
 - [x] **Vertex AI Integration:** Embedding generation parity with `enrich_vectors.js`.
 - [x] **Data Parity:** JSONL output strictly matches existing schema (Nodes/Edges).
