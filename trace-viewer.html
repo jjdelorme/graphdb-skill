@@ -593,6 +593,26 @@
         };
         reader.readAsText(file);
     }
+
+    // --- Auto-Load Local File ---
+    window.addEventListener('DOMContentLoaded', () => {
+        // Try to fetch the default trace file relative to this HTML file
+        fetch('.gemini/execution-trace.jsonl')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Status ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(text => {
+                console.log("Auto-loaded .gemini/execution-trace.jsonl");
+                parseAndRender(text);
+            })
+            .catch(err => {
+                console.log("Auto-load skipped:", err.message);
+                // Fail silently - user can still drag/drop
+            });
+    });
 </script>
 
 </body>
