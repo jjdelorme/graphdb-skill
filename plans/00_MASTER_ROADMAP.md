@@ -37,13 +37,13 @@
 
 ### Campaign 3.5: RPG Realization (From Prototype to Production)
 **Goal:** Replace the RPG placeholders (Campaign 3 skeleton) with fully functional logic for Domain Discovery, Clustering, Persistence, and LLM Integration.
-**Status:** **Active (Priority)**
+**Status:** Completed
 **Key Deliverables:**
-- [ ] **Real Domain Discovery:** Replace `SimpleDomainDiscoverer` with directory/heuristic-based logic.
-- [ ] **Semantic Clustering:** Replace `SimpleClusterer` with embedding-based or structural clustering to group functions into Features.
-- [ ] **Persistence Wiring:** Ensure `enrich-features` emits `IMPLEMENTS` edges and `Feature` nodes to storage (Neo4j/JSONL).
-- [ ] **LLM Integration:** Connect `Summarizer` to real Vertex AI client for generation.
-- [ ] **E2E Verification:** Verify a real graph is built and queryable.
+- [x] **Real Domain Discovery:** Replace `SimpleDomainDiscoverer` with directory/heuristic-based logic.
+- [x] **Semantic Clustering:** Replace `SimpleClusterer` with embedding-based or structural clustering to group functions into Features.
+- [x] **Persistence Wiring:** Ensure `enrich-features` emits `IMPLEMENTS` edges and `Feature` nodes to storage (Neo4j/JSONL).
+- [x] **LLM Integration:** Connect `Summarizer` to real Vertex AI client for generation.
+- [x] **E2E Verification:** Verify a real graph is built and queryable.
 
 ### Campaign 4: The Go Import Loader (Dependency Removal)
 **Goal:** Port the Neo4j bulk loading logic (`import_to_neo4j.js`) to Go, eliminating the Node.js runtime dependency for standard workflows.

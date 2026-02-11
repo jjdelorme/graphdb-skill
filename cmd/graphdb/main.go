@@ -191,6 +191,23 @@ func handleIngest(args []string) {
 	log.Printf("Done in %v.", time.Since(start))
 }
 
+func setupSummarizer(project, location, token string, mock bool) rpg.Summarizer {
+	if mock || project == "" {
+		if !mock && project == "" {
+			log.Println("Using Mock Summarizer (no -project provided)")
+		} else {
+			log.Println("Using Mock Summarizer")
+		}
+		return &MockSummarizer{}
+	}
+	
+	if token == "" {
+		token = os.Getenv("VERTEX_API_KEY") // Fallback
+	}
+	
+	return rpg.NewVertexSummarizer(project, location, &SimpleTokenProvider{TokenString: token})
+}
+
 func handleEnrichFeatures(args []string) {
 	fs := flag.NewFlagSet("enrich-features", flag.ExitOnError)
 	dirPtr := fs.String("dir", ".", "Directory to analyze")
@@ -203,12 +220,6 @@ func handleEnrichFeatures(args []string) {
 
 	fs.Parse(args)
 
-	// Will be used in Phase 4: LLM Integration
-	_ = projectPtr
-	_ = locationPtr
-	_ = mockEmbedPtr
-	_ = tokenPtr
-
 	log.Println("Starting feature enrichment...")
 
 	// 1. Load Functions from graph.jsonl
@@ -220,8 +231,10 @@ func handleEnrichFeatures(args []string) {
 
 	// 2. Setup Builder
 	builder := &rpg.Builder{
-		Discoverer: &SimpleDomainDiscoverer{},
-		Clusterer:  &SimpleClusterer{},
+		Discoverer: &rpg.DirectoryDomainDiscoverer{
+			BaseDirs: []string{"internal", "pkg", "cmd", "src"},
+		},
+		Clusterer: &rpg.FileClusterer{},
 	}
 
 	// 3. Build Feature Hierarchy
@@ -231,8 +244,9 @@ func handleEnrichFeatures(args []string) {
 	}
 
 	// 4. Setup Enricher
+	summarizer := setupSummarizer(*projectPtr, *locationPtr, *tokenPtr, *mockEmbedPtr)
 	enricher := &rpg.Enricher{
-		Client: &MockSummarizer{},
+		Client: summarizer,
 	}
 
 	// 5. Enrich Features

@@ -33,8 +33,8 @@ func TestBuilder_Build(t *testing.T) {
 
 	// Input: A mix of functions
 	functions := []graph.Node{
-		{ID: "func1", Properties: map[string]interface{}{"file_path": "src/auth/login.go"}},
-		{ID: "func2", Properties: map[string]interface{}{"file_path": "src/payment/charge.go"}},
+		{ID: "func1", Properties: map[string]interface{}{"file": "src/auth/login.go"}},
+		{ID: "func2", Properties: map[string]interface{}{"file": "src/payment/charge.go"}},
 	}
 
 	// Execute

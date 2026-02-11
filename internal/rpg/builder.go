@@ -40,8 +40,8 @@ func (b *Builder) Build(rootPath string, functions []graph.Node) ([]Feature, []g
 		// Filter functions for this domain
 		var domainFuncs []graph.Node
 		for _, fn := range functions {
-			// Naive check: file_path starts with prefix
-			if p, ok := fn.Properties["file_path"].(string); ok {
+			// Naive check: file starts with prefix
+			if p, ok := fn.Properties["file"].(string); ok {
 				if strings.Contains(p, pathPrefix) {
 					domainFuncs = append(domainFuncs, fn)
 				}

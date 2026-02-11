@@ -2,10 +2,10 @@
 
 ## 📋 Todo Checklist
 - [x] **Phase 1: Persistence & Wiring** (Stop the data leak)
-- [ ] **Phase 2: Domain Discovery** (Real structure)
-- [ ] **Phase 3: Semantic Clustering** (Real grouping)
-- [ ] **Phase 4: LLM Integration** (Real intelligence)
-- [ ] **Final Review:** E2E test with a real repository.
+- [x] **Phase 2: Domain Discovery** (Real structure)
+- [x] **Phase 3: Semantic Clustering** (Real grouping)
+- [x] **Phase 4: LLM Integration** (Real intelligence)
+- [x] **Final Review:** E2E test with a real repository.
 
 ## 🔍 Analysis & Investigation
 The current RPG implementation (`internal/rpg`) is a skeleton. It defines the types and flow but mocks the actual logic.
