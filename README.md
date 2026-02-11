@@ -58,15 +58,19 @@ Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
 
 ## 🚀 Getting Started
 
-### Installation
+### Prerequisites
 
-Install dependencies for both skills. Note that the `graphdb` skill requires the `--legacy-peer-deps` flag due to `tree-sitter` version incompatibilities.
+*   **Go 1.24+** -- required to build the `graphdb` binary.
+
+### Building the Go Binary
+
+The primary tool is the `graphdb` Go binary. Build it from the project root:
 
 ```bash
-cd .gemini/skills/graphdb && npm install --legacy-peer-deps
-cd ../neo4j-manager && npm install
-cd ../../../ # Return to root
+go build -o bin/graphdb cmd/graphdb/main.go
 ```
+
+This produces `bin/graphdb`, which is what the Gemini CLI skill expects (see `.gemini/skills/graphdb/SKILL.md`).
 
 ## 🗄️ Neo4j Database Setup
 
@@ -84,40 +88,56 @@ This project uses a Neo4j database containerized with Podman/Docker. A helper sc
 
 To analyze a codebase, you must first ingest it into the Graph Database. Run these commands from the **project root**:
 
-1.  **Extract Graph Data** (Parses source code to JSON):
+1.  **Extract Graph Data** (Parses source code, generates embeddings, outputs JSONL):
     ```bash
-    node .gemini/skills/graphdb/extraction/extract_graph.js
+    bin/graphdb ingest -dir <target-dir> -nodes graph_data/nodes.jsonl -edges graph_data/edges.jsonl -project $GOOGLE_CLOUD_PROJECT
     ```
-2.  **Import to Neo4j** (Loads JSON into DB):
+    Omit `-project` to use mock embeddings (faster, no GCP dependency).
+
+2.  **Build RPG Features** (Groups functions into semantic features using LLM):
     ```bash
-    node .gemini/skills/graphdb/scripts/import_to_neo4j.js
+    bin/graphdb enrich-features -dir <target-dir> -input graph_data/nodes.jsonl -output graph_data/rpg.jsonl -project $GOOGLE_CLOUD_PROJECT
     ```
-3.  **Enrichment** (Adds Git history & Semantic Vectors):
+    Flags: `--cluster-mode=semantic` for embedding-based clustering, `--mock-embedding` for dry runs.
+
+3.  **Import to Neo4j** (Loads JSONL into the database):
     ```bash
-    node .gemini/skills/graphdb/scripts/analyze_git_history.js
-    node .gemini/skills/graphdb/scripts/enrich_vectors.js
+    bin/graphdb import -input graph_data/nodes.jsonl -clean
+    bin/graphdb import -input graph_data/rpg.jsonl
     ```
 
 ## 🔍 Usage & Analysis
 
-The project follows a **"Graph-First"** workflow powered by the **`graphdb` skill**. This specialized skill provides a unified interface for both structural (Neo4j) and semantic (Vector Embeddings) analysis.
+The project follows a **"Graph-First"** workflow powered by the **`graphdb` Go binary**. It provides a unified interface for structural (Neo4j), semantic (Vector Embeddings), and intent-based (RPG) analysis.
 
-### 1. Structural & Semantic Analysis (The `graphdb` Skill - PRIMARY)
-**ALWAYS START HERE.** You must activate the `graphdb` skill (`activate_skill(name="graphdb")`) to access its specialized investigative capabilities.
+### Query Commands
 
-*   **Structural Queries (Relationships):** Map inheritance, function calls, and global state.
+All queries use the same pattern: `bin/graphdb query -type <type> [options]`
+
+*   **Intent-Based Search (RPG):** Find where a concept lives in the codebase.
     ```bash
-    node .gemini/skills/graphdb/scripts/query_graph.js <command>
+    bin/graphdb query -type search-features -target "authentication" -project $GOOGLE_CLOUD_PROJECT
     ```
-*   **Semantic Queries (Vectors):** Find code by *meaning* rather than syntax using the skill's vector search capabilities.
+*   **Explore Feature Hierarchy:** Navigate the RPG domain/feature tree.
     ```bash
-    node .gemini/skills/graphdb/scripts/find_implicit_links.js --query "business logic for..."
+    bin/graphdb query -type explore-domain -target "domain-rpg"
     ```
+*   **Dependency Analysis:** Determine what a function depends on.
+    ```bash
+    bin/graphdb query -type neighbors -target "function_name"
+    ```
+*   **Impact Analysis:** Find upstream callers affected by a change.
+    ```bash
+    bin/graphdb query -type impact -target "function_name" -depth 3
+    ```
+*   **Hybrid Context:** Combine structural dependencies with semantic similarity.
+    ```bash
+    bin/graphdb query -type hybrid-context -target "function_name" -project $GOOGLE_CLOUD_PROJECT
+    ```
+*   **Other query types:** `search-similar`, `globals`, `seams`, `fetch-source`, `locate-usage`.
 
-### 2. Text Search (Fallback)
+### Text Search (Fallback)
 Use standard `search_file_content` (Ripgrep) **ONLY** when the `graphdb` skill cannot provide the necessary data (e.g., searching for non-code assets or literal TODOs).
-
-**⚠️ WARNING:** Relying on grep for dependency or architectural analysis is prohibited. The `graphdb` skill is the source of truth for code relationships.
 
 ## ⚡ Utilities (Neo4j Manager)
 

@@ -15,6 +15,10 @@ backup_graph_data/
 # Temporary Tools and Binaries
 temp_tools/
 
+# Go compiled binaries
+/graphdb
+/bin/graphdb
+
 # Dependencies
 node_modules/
 
