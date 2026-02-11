@@ -76,6 +76,15 @@
 - [x] **Dependency Cleanup:** Stripped `package.json` of heavy Node.js dependencies.
 - [x] **Parity:** Full parity for `hybrid-context`, `test-context`, `impact`, `globals`, `seams`, `fetch-source`, and `locate-usage`.
 
+### Campaign 4.6: Snippet Service Extraction (Modularization)
+**Goal:** Extract file slicing and pattern matching logic from `internal/query/neo4j.go` into a dedicated `internal/tools/snippet` package to ensure parity with the legacy `SnippetService.js`.
+**Status:** In Progress
+**Key Deliverables:**
+- [ ] New `internal/tools/snippet` package.
+- [ ] `SliceFile` and `FindPatternInScope` implementation with tests.
+- [ ] Refactored `FetchSource` and `LocateUsage` in `Neo4jProvider`.
+- [ ] **Parity:** Context-aware pattern matching.
+
 ### Campaign 5: The Spanner Backend (Storage Swap)
 **Goal:** Establish the multi-tenant, immutable storage layer using Google Spanner Graph by swapping the storage implementation.
 **Status:** Pending
