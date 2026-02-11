@@ -7,8 +7,14 @@
 ## 📋 Todo Checklist
 - [x] **Core:** Initialize Go project with `Storage` interface abstraction.
 - [x] **Storage:** Implement `JSONLEmitter` (Phase 1 implementation of Storage).
-- [ ] **Parity:** Implement parsers for **C#, C/C++, VB.NET, SQL, TypeScript**.
-- [ ] **Enrichment:** Integrate Vertex AI for embedding generation (Parity with `enrich_vectors.js`).
+- [x] **Parity:** Implement parser for **C#**.
+- [x] **Parity:** Implement parsers for **C/C++**.
+- [x] **Parity:** Implement parser for **VB.NET**. ✅ Implemented
+- [ ] **Parity:** Implement parser for **SQL**.
+- [x] **Parity:** Implement parser for **TypeScript**.
+- [ ] **Enrichment:** Integrate Vertex AI for embedding generation.
+    - [x] **Client:** Implement Vertex AI client (`internal/embedding`).
+    - [ ] **Integration:** Wire into `ingest` worker.
 - [ ] **TDD:** Achieve 100% unit test coverage for parser logic.
 - [ ] **Verification:** "Golden Master" comparison between Node.js output and Go output.
 
