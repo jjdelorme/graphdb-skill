@@ -20,6 +20,7 @@ temp_tools/
 /bin/graphdb
 /bin/graphdb_test
 .gemini/skills/graphdb/scripts/graphdb
+.gemini/skills/graphdb/scripts/graphdb-test
 
 # Test Artifacts
 test/output/
