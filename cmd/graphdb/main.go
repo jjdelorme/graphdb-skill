@@ -24,17 +24,7 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
-// SimpleTokenProvider implements embedding.TokenProvider
-type SimpleTokenProvider struct {
-	TokenString string
-}
 
-func (p *SimpleTokenProvider) Token() (string, error) {
-	if p.TokenString == "" {
-		return "", fmt.Errorf("no token provided")
-	}
-	return p.TokenString, nil
-}
 
 
 
@@ -87,8 +77,7 @@ func handleIngest(args []string) {
 	edgesPtr := fs.String("edges", "", "Output file path for edges")
 	projectPtr := fs.String("project", "", "GCP Project ID for Vertex AI")
 	locationPtr := fs.String("location", "us-central1", "GCP Location for Vertex AI")
-	tokenPtr := fs.String("token", "", "GCP Access Token")
-
+	
 	fs.Parse(args)
 
 	var emitter storage.Emitter
@@ -116,7 +105,7 @@ func handleIngest(args []string) {
 	defer emitter.Close()
 
 	// Setup Embedder
-	embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
+	embedder := setupEmbedder(*projectPtr, *locationPtr)
 
 	// Setup Walker
 	walker := ingest.NewWalker(*workersPtr, embedder, emitter)
@@ -173,7 +162,6 @@ func handleEnrichFeatures(args []string) {
 	dirPtr := fs.String("dir", ".", "Directory to analyze")
 	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
-	tokenPtr := fs.String("token", "", "GCP Access Token")
 	inputPtr := fs.String("input", "graph.jsonl", "Input graph file")
 	outputPtr := fs.String("output", "rpg.jsonl", "Output file for RPG nodes and edges")
 	batchSizePtr := fs.Int("batch-size", 20, "Batch size for LLM feature extraction")
@@ -191,7 +179,7 @@ func handleEnrichFeatures(args []string) {
 	log.Printf("Loaded %d functions from %s", len(functions), *inputPtr)
 
 	// 2. Extract atomic features per function
-	extractor := setupExtractor(*projectPtr, *locationPtr, *tokenPtr)
+	extractor := setupExtractor(*projectPtr, *locationPtr)
 	log.Printf("Extracting atomic features (batch size: %d)...", *batchSizePtr)
 	for i := range functions {
 		fn := &functions[i]
@@ -215,7 +203,7 @@ func handleEnrichFeatures(args []string) {
 	var clusterer rpg.Clusterer
 	switch *clusterModePtr {
 	case "semantic":
-		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr)
 		clusterer = &rpg.EmbeddingClusterer{Embedder: embedder}
 		log.Println("Using semantic clustering (embedding-based)")
 	default:
@@ -236,8 +224,8 @@ func handleEnrichFeatures(args []string) {
 	}
 
 	// 5. Setup Enricher
-	summarizer := setupSummarizer(*projectPtr, *locationPtr, *tokenPtr)
-	embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
+	summarizer := setupSummarizer(*projectPtr, *locationPtr)
+	embedder := setupEmbedder(*projectPtr, *locationPtr)
 	enricher := &rpg.Enricher{
 		Client:   summarizer,
 		Embedder: embedder,
@@ -347,22 +335,33 @@ func handleImport(args []string) {
 		if err := processBatches(path, *batchSizePtr, func(batch []json.RawMessage) error {
 			var nodes []graph.Node
 			for _, raw := range batch {
-				var n graph.Node
-				// Try to parse as node. If "type" field exists and is "Function" etc.
-				// For combined files, we need to check if it's a node or edge
-				var meta map[string]interface{}
-				if err := json.Unmarshal(raw, &meta); err != nil {
+				var flat map[string]interface{}
+				if err := json.Unmarshal(raw, &flat); err != nil {
 					continue
 				}
 				
-				// Heuristic: Edges have sourceId/targetId/type
-				if _, ok := meta["sourceId"]; ok {
+				// Heuristic: Edges have "source"
+				if _, ok := flat["source"]; ok {
 					continue // It's an edge
 				}
 				
-				if err := json.Unmarshal(raw, &n); err == nil {
-					nodes = append(nodes, n)
+				id, _ := flat["id"].(string)
+				label, _ := flat["type"].(string)
+				
+				if id == "" {
+					continue
 				}
+
+				// Remove ID and Type from properties
+				delete(flat, "id")
+				delete(flat, "type")
+
+				n := graph.Node{
+					ID:         id,
+					Label:      label,
+					Properties: flat,
+				}
+				nodes = append(nodes, n)
 			}
 			return loader.BatchLoadNodes(ctx, nodes)
 		}); err != nil {
@@ -384,19 +383,30 @@ func handleImport(args []string) {
 		if err := processBatches(path, *batchSizePtr, func(batch []json.RawMessage) error {
 			var edges []graph.Edge
 			for _, raw := range batch {
-				var e graph.Edge
-				var meta map[string]interface{}
-				if err := json.Unmarshal(raw, &meta); err != nil {
+				var flat map[string]interface{}
+				if err := json.Unmarshal(raw, &flat); err != nil {
 					continue
 				}
 				
-				if _, ok := meta["sourceId"]; !ok {
+				// Heuristic: Edges have "source"
+				if _, ok := flat["source"]; !ok {
 					continue // It's a node
 				}
 				
-				if err := json.Unmarshal(raw, &e); err == nil {
-					edges = append(edges, e)
+				src, _ := flat["source"].(string)
+				tgt, _ := flat["target"].(string)
+				typ, _ := flat["type"].(string)
+
+				if src == "" || tgt == "" {
+					continue
 				}
+
+				e := graph.Edge{
+					SourceID: src,
+					TargetID: tgt,
+					Type:     typ,
+				}
+				edges = append(edges, e)
 			}
 			return loader.BatchLoadEdges(ctx, edges)
 		}); err != nil {
@@ -516,7 +526,6 @@ func handleQuery(args []string) {
 	// Embedder args for 'features' type
 	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
-	tokenPtr := fs.String("token", "", "GCP Access Token")
 
 	fs.Parse(args)
 
@@ -540,7 +549,7 @@ func handleQuery(args []string) {
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'search-features'")
 		}
-		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			 log.Fatalf("Embedding failed: %v", err)
@@ -551,7 +560,7 @@ func handleQuery(args []string) {
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'search-similar'")
 		}
-		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			 log.Fatalf("Embedding failed: %v", err)
@@ -569,7 +578,7 @@ func handleQuery(args []string) {
 		}
 
 		// 2. Semantic Search (Dependency Layer)
-		embedder := setupEmbedder(*projectPtr, *locationPtr, *tokenPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			log.Printf("Warning: Embedding failed for hybrid search: %v", err)

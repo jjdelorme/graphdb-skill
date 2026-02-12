@@ -1,13 +1,12 @@
 package rpg
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"graphdb/internal/embedding"
-	"io"
-	"net/http"
 	"strings"
+
+	"google.golang.org/genai"
 )
 
 // FeatureExtractor extracts atomic feature descriptors from a single function.
@@ -19,22 +18,25 @@ type FeatureExtractor interface {
 // LLMFeatureExtractor uses a Vertex AI / Gemini model to extract
 // atomic Verb-Object feature descriptors from function source code.
 type LLMFeatureExtractor struct {
-	ProjectID     string
-	Location      string
-	Model         string
-	TokenProvider embedding.TokenProvider
-	HTTPClient    *http.Client
+	Client *genai.Client
+	Model  string
 }
 
 // NewLLMFeatureExtractor creates an LLMFeatureExtractor with defaults.
-func NewLLMFeatureExtractor(projectID, location string, tokenProvider embedding.TokenProvider) *LLMFeatureExtractor {
-	return &LLMFeatureExtractor{
-		ProjectID:     projectID,
-		Location:      location,
-		Model:         "gemini-1.5-flash-002",
-		TokenProvider: tokenProvider,
-		HTTPClient:    &http.Client{},
+func NewLLMFeatureExtractor(ctx context.Context, projectID, location string) (*LLMFeatureExtractor, error) {
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		Project:  projectID,
+		Location: location,
+		Backend:  genai.BackendVertexAI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
+
+	return &LLMFeatureExtractor{
+		Client: client,
+		Model:  "gemini-1.5-flash-002",
+	}, nil
 }
 
 func (e *LLMFeatureExtractor) Extract(code string, functionName string) ([]string, error) {
@@ -60,58 +62,24 @@ func (e *LLMFeatureExtractor) Extract(code string, functionName string) ([]strin
 		"[\"descriptor1\", \"descriptor2\"]\n\n" +
 		fmt.Sprintf("Function name: %s\n\n%s", functionName, code)
 
-	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent",
-		e.Location, e.ProjectID, e.Location, e.Model)
-
-	payload := geminiRequest{
-		Contents: []geminiContent{
-			{
-				Role: "user",
-				Parts: []geminiPart{
-					{Text: prompt},
-				},
-			},
-		},
-	}
-
-	jsonData, err := json.Marshal(payload)
+	ctx := context.Background()
+	
+	resp, err := e.Client.Models.GenerateContent(ctx, e.Model, genai.Text(prompt), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("generate content failed: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	token, err := e.TokenProvider.Token()
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := e.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("vertex AI API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result geminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
+	if resp == nil || len(resp.Candidates) == 0 {
 		return nil, fmt.Errorf("no candidates returned from Vertex AI")
 	}
 
-	responseText := result.Candidates[0].Content.Parts[0].Text
+	// Check content parts
+	cand := resp.Candidates[0]
+	if cand.Content == nil || len(cand.Content.Parts) == 0 {
+		return nil, fmt.Errorf("empty content in response")
+	}
+
+	responseText := cand.Content.Parts[0].Text
 	responseText = strings.TrimPrefix(responseText, "```json")
 	responseText = strings.TrimSuffix(responseText, "```")
 	responseText = strings.TrimSpace(responseText)

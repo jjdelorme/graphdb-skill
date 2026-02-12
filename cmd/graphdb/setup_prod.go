@@ -3,28 +3,35 @@
 package main
 
 import (
+	"context"
 	"graphdb/internal/embedding"
 	"graphdb/internal/rpg"
-	"os"
+	"log"
 )
 
-func setupEmbedder(project, location, token string) embedding.Embedder {
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY") // Fallback
+func setupEmbedder(project, location string) embedding.Embedder {
+	ctx := context.Background()
+	embedder, err := embedding.NewVertexEmbedder(ctx, project, location)
+	if err != nil {
+		log.Fatalf("Failed to initialize Vertex Embedder: %v", err)
 	}
-	return embedding.NewVertexEmbedder(project, location, &SimpleTokenProvider{TokenString: token})
+	return embedder
 }
 
-func setupSummarizer(project, location, token string) rpg.Summarizer {
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY") // Fallback
+func setupSummarizer(project, location string) rpg.Summarizer {
+	ctx := context.Background()
+	summarizer, err := rpg.NewVertexSummarizer(ctx, project, location)
+	if err != nil {
+		log.Fatalf("Failed to initialize Vertex Summarizer: %v", err)
 	}
-	return rpg.NewVertexSummarizer(project, location, &SimpleTokenProvider{TokenString: token})
+	return summarizer
 }
 
-func setupExtractor(project, location, token string) rpg.FeatureExtractor {
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY")
+func setupExtractor(project, location string) rpg.FeatureExtractor {
+	ctx := context.Background()
+	extractor, err := rpg.NewLLMFeatureExtractor(ctx, project, location)
+	if err != nil {
+		log.Fatalf("Failed to initialize Vertex Feature Extractor: %v", err)
 	}
-	return rpg.NewLLMFeatureExtractor(project, location, &SimpleTokenProvider{TokenString: token})
+	return extractor
 }

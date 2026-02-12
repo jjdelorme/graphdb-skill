@@ -1,68 +1,36 @@
 package embedding
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
-	"net/http"
+	"log"
+
+	"google.golang.org/genai"
 )
 
-// TokenProvider defines an interface for obtaining an authentication token.
-type TokenProvider interface {
-	Token() (string, error)
-}
-
-// VertexEmbedder implements the Embedder interface using Google Cloud Vertex AI.
+// VertexEmbedder implements the Embedder interface using Google Cloud Vertex AI via the GenAI SDK.
 type VertexEmbedder struct {
-	ProjectID     string
-	Location      string
-	Model         string
-	TokenProvider TokenProvider
-	BaseURL       string // Can be overridden for testing
-	HTTPClient    *http.Client
+	Client *genai.Client
+	Model  string
 }
 
 // NewVertexEmbedder creates a new VertexEmbedder.
-func NewVertexEmbedder(projectID, location string, tokenProvider TokenProvider) *VertexEmbedder {
-	return &VertexEmbedder{
-		ProjectID:     projectID,
-		Location:      location,
-		Model:         "text-embedding-004", // Default model
-		TokenProvider: tokenProvider,
-		BaseURL:       "", // Empty implies default construction
-		HTTPClient:    &http.Client{},
+func NewVertexEmbedder(ctx context.Context, projectID, location string) (*VertexEmbedder, error) {
+	// Initialize the client with Vertex AI backend configuration
+	// This automatically uses Application Default Credentials (ADC)
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		Project:  projectID,
+		Location: location,
+		Backend:  genai.BackendVertexAI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
-}
 
-// VertexRequest represents the JSON payload for Vertex AI.
-type vertexRequest struct {
-	Instances []vertexInstance `json:"instances"`
-}
-
-type vertexInstance struct {
-	Content string `json:"content"`
-	Title   string `json:"title,omitempty"` // Optional: for retrieval tasks
-}
-
-// VertexResponse represents the JSON response from Vertex AI.
-type vertexResponse struct {
-	Predictions []vertexPrediction `json:"predictions"`
-	Error       *vertexError       `json:"error,omitempty"`
-}
-
-type vertexPrediction struct {
-	Embeddings vertexEmbeddingValues `json:"embeddings"`
-}
-
-type vertexEmbeddingValues struct {
-	Values []float32 `json:"values"`
-}
-
-type vertexError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Status  string `json:"status"`
+	return &VertexEmbedder{
+		Client: client,
+		Model:  "text-embedding-004",
+	}, nil
 }
 
 // EmbedBatch generates embeddings for a batch of texts.
@@ -71,72 +39,37 @@ func (v *VertexEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 		return nil, nil
 	}
 
-	// Construct URL
-	// Default: https://us-central1-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/publishers/google/models/MODEL:predict
-	url := v.BaseURL
-	if url == "" {
-		url = fmt.Sprintf("https://%s-aiplatform.googleapis.com", v.Location)
+	ctx := context.Background()
+	var batch []*genai.Content
+	for _, t := range texts {
+		// genai.Text returns []*Content (slice of content parts), usually one for simple text.
+		batch = append(batch, genai.Text(t)...)
 	}
-	endpoint := fmt.Sprintf("%s/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
-		url, v.ProjectID, v.Location, v.Model)
 
-	// Construct Payload
-	instances := make([]vertexInstance, len(texts))
-	for i, t := range texts {
-		instances[i] = vertexInstance{Content: t}
-	}
-	payload := vertexRequest{Instances: instances}
-	jsonData, err := json.Marshal(payload)
+	resp, err := v.Client.Models.EmbedContent(ctx, v.Model, batch, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("failed to embed content batch: %w", err)
 	}
 
-	// Create Request
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	if resp == nil {
+		return nil, fmt.Errorf("empty response from embedding service")
 	}
 
-	// Add Headers
-	req.Header.Set("Content-Type", "application/json")
-	
-	token, err := v.TokenProvider.Token()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Execute
-	resp, err := v.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call Vertex AI: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("vertex AI API returned status %d: %s", resp.StatusCode, string(body))
+	if len(resp.Embeddings) != len(texts) {
+		log.Printf("Warning: requested %d embeddings, got %d", len(texts), len(resp.Embeddings))
+		// We might still return what we have, or error. 
+		// If partial, it's safer to error as alignment is lost.
+		if len(resp.Embeddings) < len(texts) {
+			return nil, fmt.Errorf("embedding count mismatch: expected %d, got %d", len(texts), len(resp.Embeddings))
+		}
 	}
 
-	// Parse Response
-	var result vertexResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	allEmbeddings := make([][]float32, len(resp.Embeddings))
+	for i, emb := range resp.Embeddings {
+		if emb != nil {
+			allEmbeddings[i] = emb.Values
+		}
 	}
 
-	if result.Error != nil {
-		return nil, fmt.Errorf("vertex AI error %d: %s", result.Error.Code, result.Error.Message)
-	}
-
-	// Extract Embeddings
-	output := make([][]float32, len(result.Predictions))
-	for i, pred := range result.Predictions {
-		output[i] = pred.Embeddings.Values
-	}
-
-	if len(output) != len(texts) {
-		return nil, fmt.Errorf("expected %d embeddings, got %d", len(texts), len(output))
-	}
-
-	return output, nil
+	return allEmbeddings, nil
 }

@@ -3,44 +3,51 @@
 package main
 
 import (
+	"context"
 	"graphdb/internal/embedding"
 	"graphdb/internal/rpg"
 	"log"
 	"os"
 )
 
-func setupEmbedder(project, location, token string) embedding.Embedder {
+func setupEmbedder(project, location string) embedding.Embedder {
 	if os.Getenv("GRAPHDB_MOCK_ENABLED") == "true" {
 		log.Println("Using Mock Embedder (test_mocks build)")
 		return &MockEmbedder{}
 	}
 
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY") // Fallback
+	ctx := context.Background()
+	embedder, err := embedding.NewVertexEmbedder(ctx, project, location)
+	if err != nil {
+		log.Fatalf("Failed to initialize Vertex Embedder: %v", err)
 	}
-	return embedding.NewVertexEmbedder(project, location, &SimpleTokenProvider{TokenString: token})
+	return embedder
 }
 
-func setupSummarizer(project, location, token string) rpg.Summarizer {
+func setupSummarizer(project, location string) rpg.Summarizer {
 	if os.Getenv("GRAPHDB_MOCK_ENABLED") == "true" {
 		log.Println("Using Mock Summarizer (test_mocks build)")
 		return &MockSummarizer{}
 	}
 
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY") // Fallback
+	ctx := context.Background()
+	summarizer, err := rpg.NewVertexSummarizer(ctx, project, location)
+	if err != nil {
+		log.Fatalf("Failed to initialize Vertex Summarizer: %v", err)
 	}
-	return rpg.NewVertexSummarizer(project, location, &SimpleTokenProvider{TokenString: token})
+	return summarizer
 }
 
-func setupExtractor(project, location, token string) rpg.FeatureExtractor {
+func setupExtractor(project, location string) rpg.FeatureExtractor {
 	if os.Getenv("GRAPHDB_MOCK_ENABLED") == "true" {
 		log.Println("Using Mock Feature Extractor (test_mocks build)")
 		return &rpg.MockFeatureExtractor{}
 	}
 
-	if token == "" {
-		token = os.Getenv("VERTEX_API_KEY")
+	ctx := context.Background()
+	extractor, err := rpg.NewLLMFeatureExtractor(ctx, project, location)
+	if err != nil {
+		log.Fatalf("Failed to initialize Vertex Feature Extractor: %v", err)
 	}
-	return rpg.NewLLMFeatureExtractor(project, location, &SimpleTokenProvider{TokenString: token})
+	return extractor
 }

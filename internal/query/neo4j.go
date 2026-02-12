@@ -60,7 +60,7 @@ func (p *Neo4jProvider) SearchSimilarFunctions(embedding []float32, limit int) (
 	query := `
 		CALL db.index.vector.queryNodes('function_embeddings', $limit, $embedding)
 		YIELD node, score
-		RETURN node.label as label, score, properties(node) as props
+		RETURN node.name as label, score, properties(node) as props
 	`
 
 	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
@@ -147,19 +147,26 @@ func (p *Neo4jProvider) SearchFeatures(embedding []float32, limit int) ([]*Featu
 // GetNeighbors retrieves the dependencies (functions, globals) of a node.
 func (p *Neo4jProvider) GetNeighbors(nodeID string, depth int) (*NeighborResult, error) {
 	query := fmt.Sprintf(`
-		MATCH (f:Function {label: $func})
+		MATCH (n)
+		WHERE n.name = $func OR n.id = $func
+		WITH n LIMIT 1
 		
-		// 1. Direct & Transitive Globals
-		OPTIONAL MATCH path = (f)-[:CALLS*0..%d]->(callee)-[:USES_GLOBAL]->(g:Global)
-		WITH f, collect(DISTINCT {
-			dependency: g.label, 
-			type: 'Global', 
-			via: [n in nodes(path) WHERE n.label <> $func | n.label]
-		}) as globals
+		// Expand scope if n is a Class (include its methods)
+		OPTIONAL MATCH (n)-[:HAS_METHOD]->(m)
+		WITH n, collect(m) + n as scope
+		UNWIND scope as s
 
-		// 2. Direct Function Calls
-		MATCH (f)-[:CALLS]->(d:Function)
-		WITH globals, collect(DISTINCT {dependency: d.label, type: 'Function', labels: labels(d)}) as funcs
+		// 1. Direct & Transitive Globals
+		OPTIONAL MATCH path = (s)-[:CALLS*0..%d]->(callee)-[:USES_GLOBAL]->(g:Global)
+		WITH n, collect(DISTINCT CASE WHEN g IS NOT NULL THEN {
+			dependency: g.name, 
+			type: 'Global', 
+			via: [x in nodes(path) WHERE x.id <> s.id | x.name]
+		} ELSE NULL END) as globals
+
+		// 2. Direct Function Calls / Uses
+		OPTIONAL MATCH (s)-[:CALLS|USES]->(d)
+		WITH globals, collect(DISTINCT CASE WHEN d IS NOT NULL THEN {dependency: d.name, type: head(labels(d)), labels: labels(d)} ELSE NULL END) as funcs
 		
 		RETURN globals + funcs as dependencies
 	`, depth)
@@ -173,10 +180,6 @@ func (p *Neo4jProvider) GetNeighbors(nodeID string, depth int) (*NeighborResult,
 	}
 
 	if len(result.Records) == 0 {
-		// Node not found or no dependencies?
-		// Check if node exists first?
-		// For now, return empty result if no records, but the query returns aggregated list so it should return 1 record if f exists, or 0 if f doesn't exist?
-		// "MATCH (f:Function {label: $func})" acts as a filter. If f doesn't exist, it returns 0 records.
 		return nil, fmt.Errorf("node not found: %s", nodeID)
 	}
 
@@ -192,20 +195,22 @@ func (p *Neo4jProvider) GetNeighbors(nodeID string, depth int) (*NeighborResult,
 			continue
 		}
 		
+		name, _ := item["dependency"].(string)
+		typ, _ := item["type"].(string)
+
 		dep := Dependency{
-			Name: item["dependency"].(string),
-			Type: item["type"].(string),
+			Name: name,
+			Type: typ,
 		}
 
 		if viaRaw, ok := item["via"]; ok && viaRaw != nil {
 			if viaList, ok := viaRaw.([]any); ok {
 				via := make([]string, len(viaList))
 				for i, v := range viaList {
-					via[i] = v.(string)
+					if s, ok := v.(string); ok {
+						via[i] = s
+					}
 				}
-				// Clean up: if via is empty, it might be direct.
-				// The JS code did: if (item.type === 'Global' && item.via.length === 0) delete item.via;
-				// In Go, empty slice is fine.
 				dep.Via = via
 			}
 		}
@@ -213,9 +218,6 @@ func (p *Neo4jProvider) GetNeighbors(nodeID string, depth int) (*NeighborResult,
 	}
 
 	return &NeighborResult{
-		// Node: ... we didn't fetch the node properties, just dependencies. 
-		// The interface says Node *graph.Node. We might want to fetch it or leave it nil.
-		// For now, let's leave it nil or populate with minimal info.
 		Node:         &graph.Node{Label: nodeID}, 
 		Dependencies: deps,
 	}, nil
@@ -224,8 +226,9 @@ func (p *Neo4jProvider) GetNeighbors(nodeID string, depth int) (*NeighborResult,
 // GetCallers retrieves the callers of a node.
 func (p *Neo4jProvider) GetCallers(nodeID string) ([]string, error) {
 	query := `
-		MATCH (caller:Function)-[:CALLS]->(f:Function {label: $func})
-		RETURN collect(DISTINCT caller.label) as callers
+		MATCH (n) WHERE n.name = $func OR n.id = $func
+		MATCH (caller)-[:CALLS]->(n)
+		RETURN collect(DISTINCT caller.name) as callers
 	`
 
 	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
@@ -247,7 +250,9 @@ func (p *Neo4jProvider) GetCallers(nodeID string) ([]string, error) {
 
 	callers := make([]string, len(callersRaw))
 	for i, raw := range callersRaw {
-		callers[i] = raw.(string)
+		if s, ok := raw.(string); ok {
+			callers[i] = s
+		}
 	}
 
 	return callers, nil
@@ -257,8 +262,9 @@ func (p *Neo4jProvider) GetCallers(nodeID string) ([]string, error) {
 func (p *Neo4jProvider) GetImpact(nodeID string, depth int) (*ImpactResult, error) {
 	// Construct dynamic query for variable path length
 	query := fmt.Sprintf(`
-		MATCH (caller:Function)-[:CALLS*1..%d]->(f:Function {label: $nodeID}) 
-		RETURN DISTINCT caller.label as caller, caller.ui_contaminated as contaminated
+		MATCH (n) WHERE n.name = $nodeID OR n.id = $nodeID
+		MATCH (caller)-[:CALLS*1..%d]->(n) 
+		RETURN DISTINCT caller.name as caller, caller.ui_contaminated as contaminated
 	`, depth)
 
 	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
@@ -296,8 +302,9 @@ func (p *Neo4jProvider) GetImpact(nodeID string, depth int) (*ImpactResult, erro
 // GetGlobals identifies global variable usage.
 func (p *Neo4jProvider) GetGlobals(nodeID string) (*GlobalUsageResult, error) {
 	query := `
-		MATCH (f:Function {label: $nodeID})-[:USES_GLOBAL]->(g:Global) 
-		RETURN g.label as name, g.file as defined_in
+		MATCH (n) WHERE n.name = $nodeID OR n.id = $nodeID
+		MATCH (n)-[:USES_GLOBAL]->(g:Global) 
+		RETURN g.name as name, g.file as defined_in
 	`
 
 	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
@@ -336,7 +343,7 @@ func (p *Neo4jProvider) GetSeams(modulePattern string) ([]*SeamResult, error) {
 	query := `
 		MATCH (caller:Function {ui_contaminated: true})-[:CALLS]->(f:Function {ui_contaminated: false})-[:DEFINED_IN]->(file:File)
 		WHERE file.file =~ $pattern
-		RETURN DISTINCT f.label as seam, file.file as file, f.risk_score as risk
+		RETURN DISTINCT f.name as seam, file.file as file, f.risk_score as risk
 		ORDER BY f.risk_score DESC
 		LIMIT 20
 	`
@@ -383,7 +390,7 @@ func (p *Neo4jProvider) GetSeams(modulePattern string) ([]*SeamResult, error) {
 // FetchSource retrieves the source code for a node.
 func (p *Neo4jProvider) FetchSource(nodeID string) (string, error) {
 	query := `
-		MATCH (n) WHERE n.id = $id OR n.label = $id
+		MATCH (n) WHERE n.id = $id OR n.name = $id
 		RETURN n.file as file, n.start_line as start, n.end_line as end
 	`
 	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{

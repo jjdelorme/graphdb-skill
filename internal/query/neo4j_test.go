@@ -29,7 +29,7 @@ func getProvider(t *testing.T) *Neo4jProvider {
 
 func cleanup(t *testing.T, p *Neo4jProvider) {
 	_, err := neo4j.ExecuteQuery(p.ctx, p.driver, `
-		MATCH (n) WHERE n.label STARTS WITH 'Test' OR n.label = 'ContaminatedCaller' OR n.label = 'SeamFunc' OR n.file = 'test_fixture.go' DETACH DELETE n
+		MATCH (n) WHERE n.name STARTS WITH 'Test' OR n.name = 'ContaminatedCaller' OR n.name = 'SeamFunc' OR n.file = 'test_fixture.go' DETACH DELETE n
 	`, nil, neo4j.EagerResultTransformer)
 	if err != nil {
 		t.Logf("Failed to cleanup: %v", err)
@@ -48,9 +48,9 @@ func TestGetNeighbors(t *testing.T) {
 
 	// Setup fixture data
 	setupQuery := `
-		CREATE (f:Function {label: 'TestFunc', embedding: [0.1, 0.2, 0.3]})
-		CREATE (c:Function {label: 'TestCallee'})
-		CREATE (g:Global {label: 'TestGlobal', file: 'test_fixture.go'})
+		CREATE (f:Function {name: 'TestFunc', id: 'TestFunc', embedding: [0.1, 0.2, 0.3]})
+		CREATE (c:Function {name: 'TestCallee', id: 'TestCallee'})
+		CREATE (g:Global {name: 'TestGlobal', id: 'TestGlobal', file: 'test_fixture.go'})
 		CREATE (f)-[:CALLS]->(c)
 		CREATE (c)-[:USES_GLOBAL]->(g)
 	`
@@ -72,7 +72,6 @@ func TestGetNeighbors(t *testing.T) {
 	for _, dep := range result.Dependencies {
 		if dep.Name == "TestGlobal" && dep.Type == "Global" {
 			foundGlobal = true
-			// Path includes [Callee, Global] in Neo4j logic from JS query
 			if len(dep.Via) != 2 || dep.Via[0] != "TestCallee" || dep.Via[1] != "TestGlobal" {
 				t.Errorf("Expected global via [TestCallee, TestGlobal], got %v", dep.Via)
 			}
@@ -96,8 +95,8 @@ func TestGetCallers(t *testing.T) {
 	defer cleanup(t, p)
 
 	setupQuery := `
-		CREATE (caller:Function {label: 'TestCaller'})
-		CREATE (target:Function {label: 'TestTarget'})
+		CREATE (caller:Function {name: 'TestCaller', id: 'TestCaller'})
+		CREATE (target:Function {name: 'TestTarget', id: 'TestTarget'})
 		CREATE (caller)-[:CALLS]->(target)
 	`
 	_, err := neo4j.ExecuteQuery(p.ctx, p.driver, setupQuery, nil, neo4j.EagerResultTransformer)
@@ -121,9 +120,9 @@ func TestGetImpact(t *testing.T) {
 	defer cleanup(t, p)
 
 	setupQuery := `
-		CREATE (caller:Function {label: 'TestDeepCaller', ui_contaminated: true})
-		CREATE (mid:Function {label: 'TestMid'})
-		CREATE (target:Function {label: 'TestTarget'})
+		CREATE (caller:Function {name: 'TestDeepCaller', id: 'TestDeepCaller', ui_contaminated: true})
+		CREATE (mid:Function {name: 'TestMid', id: 'TestMid'})
+		CREATE (target:Function {name: 'TestTarget', id: 'TestTarget'})
 		CREATE (caller)-[:CALLS]->(mid)
 		CREATE (mid)-[:CALLS]->(target)
 	`
@@ -168,8 +167,8 @@ func TestGetGlobals(t *testing.T) {
 	defer cleanup(t, p)
 
 	setupQuery := `
-		CREATE (f:Function {label: 'TestFunc'})
-		CREATE (g:Global {label: 'TestGlobalVar', file: 'test_fixture.go'})
+		CREATE (f:Function {name: 'TestFunc', id: 'TestFunc'})
+		CREATE (g:Global {name: 'TestGlobalVar', id: 'TestGlobalVar', file: 'test_fixture.go'})
 		CREATE (f)-[:USES_GLOBAL]->(g)
 	`
 	_, err := neo4j.ExecuteQuery(p.ctx, p.driver, setupQuery, nil, neo4j.EagerResultTransformer)
@@ -199,9 +198,9 @@ func TestGetSeams(t *testing.T) {
 	defer cleanup(t, p)
 
 	setupQuery := `
-		CREATE (caller:Function {label: 'ContaminatedCaller', ui_contaminated: true})
-		CREATE (seam:Function {label: 'SeamFunc', ui_contaminated: false, risk_score: 0.8})
-		CREATE (file:File {file: 'test_fixture.go'})
+		CREATE (caller:Function {name: 'ContaminatedCaller', id: 'ContaminatedCaller', ui_contaminated: true})
+		CREATE (seam:Function {name: 'SeamFunc', id: 'SeamFunc', ui_contaminated: false, risk_score: 0.8})
+		CREATE (file:File {id: 'test_fixture.go', file: 'test_fixture.go'})
 		CREATE (caller)-[:CALLS]->(seam)
 		CREATE (seam)-[:DEFINED_IN]->(file)
 	`
@@ -257,8 +256,8 @@ func TestSearchSimilarFunctions(t *testing.T) {
 
 	// Note: We use 'Function' label here
 	setupQuery := `
-		CREATE (f1:Function {label: 'TestSim1', embedding: $v1})
-		CREATE (f2:Function {label: 'TestSim2', embedding: $v2})
+		CREATE (f1:Function {name: 'TestSim1', id: 'TestSim1', embedding: $v1})
+		CREATE (f2:Function {name: 'TestSim2', id: 'TestSim2', embedding: $v2})
 	`
 	_, err := neo4j.ExecuteQuery(p.ctx, p.driver, setupQuery, map[string]any{
 		"v1": v1,

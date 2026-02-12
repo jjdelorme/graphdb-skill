@@ -1,14 +1,14 @@
 package rpg
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"graphdb/internal/embedding"
 	"graphdb/internal/graph"
-	"io"
-	"net/http"
 	"strings"
+
+	"google.golang.org/genai"
 )
 
 type Summarizer interface {
@@ -69,44 +69,24 @@ func (e *Enricher) Enrich(feature *Feature, functions []graph.Node) error {
 }
 
 type VertexSummarizer struct {
-	ProjectID     string
-	Location      string
-	Model         string
-	TokenProvider embedding.TokenProvider
-	HTTPClient    *http.Client
+	Client *genai.Client
+	Model  string
 }
 
-func NewVertexSummarizer(projectID, location string, tokenProvider embedding.TokenProvider) *VertexSummarizer {
-	return &VertexSummarizer{
-		ProjectID:     projectID,
-		Location:      location,
-		Model:         "gemini-1.5-flash-002",
-		TokenProvider: tokenProvider,
-		HTTPClient:    &http.Client{},
+func NewVertexSummarizer(ctx context.Context, projectID, location string) (*VertexSummarizer, error) {
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		Project:  projectID,
+		Location: location,
+		Backend:  genai.BackendVertexAI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
-}
 
-type geminiRequest struct {
-	Contents []geminiContent `json:"contents"`
-}
-
-type geminiContent struct {
-	Role  string       `json:"role"`
-	Parts []geminiPart `json:"parts"`
-}
-
-type geminiPart struct {
-	Text string `json:"text"`
-}
-
-type geminiResponse struct {
-	Candidates []struct {
-		Content struct {
-			Parts []struct {
-				Text string `json:"text"`
-			} `json:"parts"`
-		} `json:"content"`
-	} `json:"candidates"`
+	return &VertexSummarizer{
+		Client: client,
+		Model:  "gemini-1.5-flash-002",
+	}, nil
 }
 
 func (s *VertexSummarizer) Summarize(snippets []string) (string, string, error) {
@@ -125,58 +105,24 @@ Return your response in JSON format ONLY:
 Code Snippets:
 %s`, strings.Join(snippets, "\n---\n"))
 
-	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent",
-		s.Location, s.ProjectID, s.Location, s.Model)
-
-	payload := geminiRequest{
-		Contents: []geminiContent{
-			{
-				Role: "user",
-				Parts: []geminiPart{
-					{Text: prompt},
-				},
-			},
-		},
-	}
-
-	jsonData, err := json.Marshal(payload)
+	ctx := context.Background()
+	
+	resp, err := s.Client.Models.GenerateContent(ctx, s.Model, genai.Text(prompt), nil)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("generate content failed: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", "", err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	token, err := s.TokenProvider.Token()
-	if err != nil {
-		return "", "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := s.HTTPClient.Do(req)
-	if err != nil {
-		return "", "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", "", fmt.Errorf("vertex AI API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result geminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", "", err
-	}
-
-	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
+	if resp == nil || len(resp.Candidates) == 0 {
 		return "", "", fmt.Errorf("no candidates returned from Vertex AI")
 	}
+	
+	// Check content parts
+	cand := resp.Candidates[0]
+	if cand.Content == nil || len(cand.Content.Parts) == 0 {
+		return "", "", fmt.Errorf("empty content in response")
+	}
 
-	responseText := result.Candidates[0].Content.Parts[0].Text
+	responseText := cand.Content.Parts[0].Text
 	// Strip markdown blocks if present
 	responseText = strings.TrimPrefix(responseText, "```json")
 	responseText = strings.TrimSuffix(responseText, "```")

@@ -49,6 +49,7 @@ func (p *JavaParser) Parse(filePath string, content []byte) ([]*graph.Node, []*g
 	qcDef.Exec(qDef, tree.RootNode())
 
 	var nodes []*graph.Node
+	var edges []*graph.Edge
 
 	for {
 		m, ok := qcDef.NextMatch()
@@ -66,16 +67,29 @@ func (p *JavaParser) Parse(filePath string, content []byte) ([]*graph.Node, []*g
 			nodeName := c.Node.Content(content)
 
 			var label string
+			var id string
 			if strings.HasPrefix(captureName, "class") {
 				label = "Class"
+				id = nodeName // Global ID for Classes
 			} else if strings.HasPrefix(captureName, "function") {
 				label = "Function"
+				id = fmt.Sprintf("%s:%s", filePath, nodeName) // Scoped ID for Functions
+				
+				// Create HAS_METHOD edge
+				parentClass := findEnclosingClass(c.Node, content)
+				if parentClass != "" {
+					edges = append(edges, &graph.Edge{
+						SourceID: parentClass, // Global Class ID
+						TargetID: id,
+						Type:     "HAS_METHOD",
+					})
+				}
 			} else {
 				continue
 			}
 
 			n := &graph.Node{
-				ID:    fmt.Sprintf("%s:%s", filePath, nodeName),
+				ID:    id,
 				Label: label,
 				Properties: map[string]interface{}{
 					"name": nodeName,
@@ -90,6 +104,7 @@ func (p *JavaParser) Parse(filePath string, content []byte) ([]*graph.Node, []*g
 	// 2. Reference/Call Query
 	refQueryStr := `
 		(method_invocation
+			object: (identifier)? @call.scope
 			name: (identifier) @call.target
 		) @call.site
 
@@ -109,8 +124,6 @@ func (p *JavaParser) Parse(filePath string, content []byte) ([]*graph.Node, []*g
 
 	qcRef.Exec(qRef, tree.RootNode())
 
-	var edges []*graph.Edge
-
 	for {
 		m, ok := qcRef.NextMatch()
 		if !ok {
@@ -118,6 +131,7 @@ func (p *JavaParser) Parse(filePath string, content []byte) ([]*graph.Node, []*g
 		}
 
 		var targetName string
+		var scopeName string
 		var callNode *sitter.Node
 
 		for _, c := range m.Captures {
@@ -125,19 +139,46 @@ func (p *JavaParser) Parse(filePath string, content []byte) ([]*graph.Node, []*g
 			if name == "call.target" {
 				targetName = c.Node.Content(content)
 			}
+			if name == "call.scope" {
+				scopeName = c.Node.Content(content)
+			}
 			if name == "call.site" {
 				callNode = c.Node
 			}
 		}
 
-		if targetName != "" && callNode != nil {
+		if callNode != nil {
 			sourceFunc := findEnclosingJavaFunction(callNode, content)
 			if sourceFunc != "" {
-				edges = append(edges, &graph.Edge{
-					SourceID: fmt.Sprintf("%s:%s", filePath, sourceFunc),
-					TargetID: fmt.Sprintf("%s:%s", filePath, targetName),
-					Type:     "CALLS",
-				})
+				sourceID := fmt.Sprintf("%s:%s", filePath, sourceFunc)
+				
+				// 1. Handle Constructor Calls (new Type())
+				if callNode.Type() == "object_creation_expression" && targetName != "" {
+					edges = append(edges, &graph.Edge{
+						SourceID: sourceID,
+						TargetID: targetName, // Links to Global Class ID
+						Type:     "CALLS",
+					})
+				}
+
+				// 2. Handle Method Calls with Scope (Scope.method())
+				if callNode.Type() == "method_invocation" {
+					// Link to the Scope (Dependency on the class/object)
+					if scopeName != "" {
+						edges = append(edges, &graph.Edge{
+							SourceID: sourceID,
+							TargetID: scopeName, // Links to Global Class ID (heuristic)
+							Type:     "USES",      // Differentiate from direct CALLS? Or keep CALLS?
+						})
+					} else if targetName != "" {
+						// Internal call or statically imported call
+						edges = append(edges, &graph.Edge{
+							SourceID: sourceID,
+							TargetID: fmt.Sprintf("%s:%s", filePath, targetName),
+							Type:     "CALLS",
+						})
+					}
+				}
 			}
 		}
 	}
@@ -151,6 +192,21 @@ func findEnclosingJavaFunction(n *sitter.Node, content []byte) string {
 		t := curr.Type()
 		// method_declaration, constructor_declaration
 		if t == "method_declaration" || t == "constructor_declaration" {
+			nameNode := curr.ChildByFieldName("name")
+			if nameNode != nil {
+				return nameNode.Content(content)
+			}
+		}
+		curr = curr.Parent()
+	}
+	return ""
+}
+
+func findEnclosingClass(n *sitter.Node, content []byte) string {
+	curr := n.Parent()
+	for curr != nil {
+		t := curr.Type()
+		if t == "class_declaration" || t == "interface_declaration" || t == "enum_declaration" {
 			nameNode := curr.ChildByFieldName("name")
 			if nameNode != nil {
 				return nameNode.Content(content)
