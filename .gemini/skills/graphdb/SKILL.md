@@ -66,7 +66,7 @@ The primary way to interact with the graph is via the `query` command.
 | :--- | :--- | :--- | :--- |
 | `search-features` | **Intent Search.** Find features/concepts using vector search. | Natural language query | `-limit` |
 | `search-similar` | **Code Search.** Find functions semantically similar to a query. | Natural language or code snippet | `-limit` |
-| `neighbors` | **Dependency Analysis.** Find immediate callers and callees. | Function Name (exact) | `-depth` |
+| `neighbors` / `test-context` | **Dependency Analysis.** Find immediate callers and callees. | Function Name (exact) | `-depth` |
 | `hybrid-context` | **Combined.** Structural neighbors + semantic similarities. Great for refactoring. | Function Name | `-depth`, `-limit` |
 | `impact` | **Risk Analysis.** What other parts of the system behave differently if I change this? | Function Name | `-depth` |
 | `globals` | **State Analysis.** Find global variables used by a function. | Function Name | |

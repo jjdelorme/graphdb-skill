@@ -124,7 +124,7 @@ Find implicit links using vector search.
 node .gemini/skills/graphdb/scripts/find_implicit_links.js --query "natural language query"
 ```
 
-> **📘 Detailed Examples:** See **[QUERY_EXAMPLES.md](QUERY_EXAMPLES.md)** for comprehensive usage scenarios and output descriptions.
+> **📘 Note:** For detailed usage, refer to the **Query Types Reference** in **[SKILL.md](SKILL.md)**.
 
 ---
 

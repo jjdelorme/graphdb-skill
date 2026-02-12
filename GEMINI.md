@@ -48,6 +48,13 @@ cd ../neo4j-manager && npm install
 cd ../../../ # Return to root
 ```
 
+**Build the GraphDB Go Binary:**
+The skill relies on a compiled Go binary. Build it from the project root using the Makefile:
+
+```bash
+make build
+```
+
 ## 🛠️ Operational Guides
 
 ### Neo4j & SSH Operations (Remote Management)
