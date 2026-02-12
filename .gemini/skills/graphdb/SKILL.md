@@ -26,31 +26,37 @@ Ensure the following are set (typically in `.env` or your session):
 
 ## Workflows
 
-### 1. Ingestion Pipeline (Full Rebuild)
-To rebuild the graph from source:
+### 1. Ingestion Pipeline
+To ensure the graph reflects the current state of the codebase, follow these steps:
 
-1.  **Ingest (Parse & Embed):**
-    Scans code, generates embeddings, and creates a graph JSONL file.
-    ```bash
-    ./scripts/graphdb ingest -dir . -output graph.jsonl -project $GOOGLE_CLOUD_PROJECT
-    ```
-    *   *Options:* `-workers` (concurrency), `-file-list` (specific files), `-mock-embedding` (fast, no semantic search).
+**Step 0: Check Sync Status (Recommended)**
+Before starting a full rebuild, verify if the graph is already in sync with your local checkout.
+1. Get local commit: `git rev-parse HEAD`
+2. Get graph commit: `./scripts/graphdb query -type status`
+3. **Decision:** If the commit hashes match, you can **skip** the ingestion pipeline and proceed directly to "Analysis & Querying".
 
-2.  **Enrich (Build Intent Layer):**
-    Groups code into high-level features (RPG) using LLMs.
-    ```bash
-    ./scripts/graphdb enrich-features -input graph.jsonl -output rpg.jsonl -cluster-mode semantic -project $GOOGLE_CLOUD_PROJECT
-    ```
-    *   *Options:* `-cluster-mode` (`file` or `semantic`), `-mock-extraction` (skip LLM calls).
+**Step 1: Ingest (Parse & Embed):**
+Scans code, generates embeddings, and creates a graph JSONL file.
+```bash
+./scripts/graphdb ingest -dir . -output graph.jsonl -project $GOOGLE_CLOUD_PROJECT
+```
+*   *Options:* `-workers` (concurrency), `-file-list` (specific files), `-mock-embedding` (fast, no semantic search).
 
-3.  **Import (Load to Neo4j):**
-    Loads the generated JSONL files into the active Neo4j database.
-    ```bash
-    ./scripts/graphdb import -input graph.jsonl -clean
-    # AND/OR
-    ./scripts/graphdb import -input rpg.jsonl
-    ```
-    *   *Options:* `-clean` (wipe DB first), `-batch-size`.
+**Step 2: Enrich (Build Intent Layer):**
+Groups code into high-level features (RPG) using LLMs.
+```bash
+./scripts/graphdb enrich-features -input graph.jsonl -output rpg.jsonl -cluster-mode semantic -project $GOOGLE_CLOUD_PROJECT
+```
+*   *Options:* `-cluster-mode` (`file` or `semantic`), `-mock-extraction` (skip LLM calls).
+
+**Step 3: Import (Load to Neo4j):**
+Loads the generated JSONL files into the active Neo4j database.
+```bash
+./scripts/graphdb import -input graph.jsonl -clean
+# AND/OR
+./scripts/graphdb import -input rpg.jsonl
+```
+*   *Options:* `-clean` (wipe DB first), `-batch-size`.
 
 ### 2. Analysis & Querying
 The primary way to interact with the graph is via the `query` command.
@@ -75,13 +81,6 @@ The primary way to interact with the graph is via the `query` command.
 | `fetch-source` | **Read.** Fetch the source code of a function by ID/Name. | Function Name | |
 | `explore-domain` | **Discovery.** Explore the domain model around a concept. | Concept/Entity Name | |
 | `status` | **Verification.** Check the git commit hash stored in the graph. | (None) | |
-
-## Verification
-To ensure the graph is in sync with the local codebase:
-
-1.  **Get Local Commit:** `git rev-parse HEAD`
-2.  **Get Graph Commit:** `./scripts/graphdb query -type status`
-3.  **Compare:** If they differ, re-run the **Ingestion Pipeline** (Step 1 in Workflows).
 
 ## Operational Guidelines
 *   **Output Parsing:** The tool returns JSON. Parse it and present a concise summary (bullet points, mermaid diagrams, or tables).
