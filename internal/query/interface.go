@@ -80,4 +80,5 @@ type GraphProvider interface {
 	FetchSource(nodeID string) (string, error)
 	LocateUsage(sourceID string, targetID string) (any, error)
 	ExploreDomain(featureID string) (*DomainExplorationResult, error)
+	GetGraphState() (string, error)
 }

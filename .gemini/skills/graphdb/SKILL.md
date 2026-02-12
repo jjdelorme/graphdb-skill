@@ -74,6 +74,14 @@ The primary way to interact with the graph is via the `query` command.
 | `locate-usage` | **Trace.** Find path/usage between two functions. | Function 1 | `-target2 <Function 2>` |
 | `fetch-source` | **Read.** Fetch the source code of a function by ID/Name. | Function Name | |
 | `explore-domain` | **Discovery.** Explore the domain model around a concept. | Concept/Entity Name | |
+| `status` | **Verification.** Check the git commit hash stored in the graph. | (None) | |
+
+## Verification
+To ensure the graph is in sync with the local codebase:
+
+1.  **Get Local Commit:** `git rev-parse HEAD`
+2.  **Get Graph Commit:** `./scripts/graphdb query -type status`
+3.  **Compare:** If they differ, re-run the **Ingestion Pipeline** (Step 1 in Workflows).
 
 ## Operational Guidelines
 *   **Output Parsing:** The tool returns JSON. Parse it and present a concise summary (bullet points, mermaid diagrams, or tables).

@@ -538,3 +538,27 @@ func (p *Neo4jProvider) ExploreDomain(featureID string) (*DomainExplorationResul
 		Functions: extractNodes("functions", "Function"),
 	}, nil
 }
+
+// GetGraphState retrieves the stored commit hash from the graph.
+func (p *Neo4jProvider) GetGraphState() (string, error) {
+	query := `
+		MATCH (s:GraphState)
+		RETURN s.commit as commit
+		LIMIT 1
+	`
+	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, nil, neo4j.EagerResultTransformer)
+	if err != nil {
+		return "", fmt.Errorf("failed to query graph state: %w", err)
+	}
+
+	if len(result.Records) == 0 {
+		return "", nil // No state stored
+	}
+
+	commit, _, err := neo4j.GetRecordValue[string](result.Records[0], "commit")
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit from record: %w", err)
+	}
+
+	return commit, nil
+}

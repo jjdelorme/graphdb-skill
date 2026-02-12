@@ -631,8 +631,17 @@ func handleQuery(args []string) {
 		}
 		result, err = provider.ExploreDomain(*targetPtr)
 
+	case "status":
+		commit, err := provider.GetGraphState()
+		if err != nil {
+			log.Fatalf("Status check failed: %v", err)
+		}
+		result = map[string]string{
+			"commit": commit,
+		}
+
 	default:
-		log.Fatalf("Unknown or missing query type: %s. Valid types: search-features, search-similar, hybrid-context, neighbors, impact, globals, seams, explore-domain", *typePtr)
+		log.Fatalf("Unknown or missing query type: %s. Valid types: search-features, search-similar, hybrid-context, neighbors, impact, globals, seams, explore-domain, status", *typePtr)
 	}
 	
 	if err != nil {
