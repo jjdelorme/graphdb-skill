@@ -85,6 +85,15 @@
 - [x] Refactored `FetchSource` and `LocateUsage` in `Neo4jProvider`.
 - [x] **Parity:** Context-aware pattern matching.
 
+### Campaign 4.7: Parametric Traversal (Ad-Hoc Investigation)
+**Goal:** Empower agents to perform ad-hoc graph exploration without predefined query templates. This introduces a flexible `traverse` command (replacing rigid queries like `impact` or `dependencies`) that accepts dynamic filters, directions, and depths. This capability acts as a functional bridge and verify-able harness for the upcoming Spanner migration (Campaign 6), ensuring complex traversals work identically on both backends.
+**Status:** **Completed**
+**Key Deliverables:**
+- [x] **Unified Traversal API:** A single `Traverse(start, depth, criteria)` method in `GraphProvider`.
+- [x] **Dynamic CLI:** A `traverse` CLI command accepting JSON-based traversal specs (replacing hardcoded flags).
+- [x] **Parity Harness:** Use this generic traverser to implement existing named queries (e.g., `impact` becomes a specific configuration of `traverse`), proving the engine's flexibility.
+- [x] **Plan:** Ref: `plans/feat_parametric_traversal.md`.
+
 ### Campaign 5: Structural Integrity (The "Linking" Fix)
 **Goal:** Remediation of the "File-Local" linking bug found in all parsers (Java, C#, C++, TS). Currently, parsers assume dependencies exist in the caller's file, breaking the graph. We must implement Import Parsing and Symbol Resolution to enable cross-file edges.
 **Status:** **CRITICAL PRIORITY** (Next)

@@ -1,11 +1,11 @@
 # Feature Implementation Plan: Parametric Traversal
 
 ## 📋 Todo Checklist
-- [ ] **Step 1:** Define the Verification Harness (Black-box interface tests).
-- [ ] **Step 2:** Update Interface Documentation & Helpers.
-- [ ] **Step 3:** Implement `Traverse` in `internal/query/neo4j.go` (Cypher generation).
-- [ ] **Step 4:** Integrate `traverse` command in `cmd/graphdb/main.go`.
-- [ ] **Step 5:** Final System Verification (Run harness against implementation).
+- [x] **Step 1:** Define the Verification Harness (Black-box interface tests).
+- [x] **Step 2:** Update Interface Documentation & Helpers.
+- [x] **Step 3:** Implement `Traverse` in `internal/query/neo4j.go` (Cypher generation).
+- [x] **Step 4:** Integrate `traverse` command in `cmd/graphdb/main.go`.
+- [x] **Step 5:** Final System Verification (Run harness against implementation).
 
 ## 🔍 Analysis & Investigation
 
