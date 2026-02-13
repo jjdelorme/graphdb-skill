@@ -102,3 +102,35 @@ graph TD
 
 *   **Seams & Risks:**
     *   The `impact` and `seams` queries rely on the `CALLS` graph to calculate "Contamination". If a function touches a UI component or a database, that "risk" propagates up the `CALLS` edges to its callers.
+
+---
+
+## 4. The Ingestion Pipeline
+
+The transition from raw code to a queryable knowledge graph occurs in four distinct phases. This pipeline is designed to be deterministic where possible (parsing) and probabilistic where necessary (intent understanding).
+
+### Phase 1: Extraction (Parsing)
+*   **Mechanism:** A high-performance Go binary (`graphdb extract`) uses a worker pool to walk the file system in parallel.
+*   **Parsing:** Uses **Tree-sitter** bindings to generate a Concrete Syntax Tree (CST) for every file.
+*   **Graph Construction:**
+    *   **Nodes:** Extracts structural entities: `File`, `Class`, `Function`, `Field`, `Global`.
+    *   **Edges:** Identifies relationships: `HAS_METHOD`, `DEFINES`, `INHERITS`, `CALLS`, `USES`.
+*   **Resolution:** Performs **Systemic Resolution** on the fly, resolving imports (e.g., `using System;`, `import java.util.*;`) to link types across file boundaries.
+
+### Phase 2: Embedding (Vectorization)
+*   **Mechanism:** The pipeline isolates function bodies and signatures.
+*   **Model:** Sends text to Google's Vertex AI (`text-embedding-004`).
+*   **Storage:** The resulting 768-dimensional vectors are stored as properties on `Function` nodes, enabling semantic search and clustering.
+
+### Phase 3: RPG Construction (Intent Generation)
+This phase builds the "Intent Layer" (RPG) on top of the physical code.
+
+1.  **Atomic Feature Extraction:** An LLM analyzes each function to extract a "Verb-Object" descriptor (e.g., "validates email", "hashes password").
+2.  **Semantic Clustering:** The **EmbeddingClusterer** uses K-Means++ on the function vectors to group code with similar semantic meaning, regardless of directory structure.
+3.  **Summarization:** An LLM generates a concise name and description for each cluster (e.g., "User Authentication").
+4.  **Linking:** Creates `IMPLEMENTS` edges connecting the physical `Function` nodes to the new logical `Feature` nodes.
+
+### Phase 4: Loading (Persistence)
+*   **Format:** The pipeline emits a stream of JSONL records (Nodes and Edges).
+*   **Ingestion:** The `graphdb import` command reads the JSONL stream.
+*   **Batching:** Uses Cypher `UNWIND` clauses to batch-insert thousands of records per transaction into Neo4j, ensuring high throughput and transactional integrity.
