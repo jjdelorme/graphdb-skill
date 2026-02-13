@@ -15,7 +15,7 @@ type VertexEmbedder struct {
 }
 
 // NewVertexEmbedder creates a new VertexEmbedder.
-func NewVertexEmbedder(ctx context.Context, projectID, location string) (*VertexEmbedder, error) {
+func NewVertexEmbedder(ctx context.Context, projectID, location, modelName string) (*VertexEmbedder, error) {
 	// Initialize the client with Vertex AI backend configuration
 	// This automatically uses Application Default Credentials (ADC)
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -29,7 +29,7 @@ func NewVertexEmbedder(ctx context.Context, projectID, location string) (*Vertex
 
 	return &VertexEmbedder{
 		Client: client,
-		Model:  "text-embedding-004",
+		Model:  modelName,
 	}, nil
 }
 

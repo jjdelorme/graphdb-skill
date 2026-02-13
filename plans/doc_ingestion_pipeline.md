@@ -35,7 +35,7 @@ The transition from raw code to a queriable knowledge graph occurs in four disti
 
 ### Phase 2: Embedding (Vectorization)
 *   **Mechanism:** The pipeline isolates function bodies and signatures.
-*   **Model:** Sends text to Google's Vertex AI (`text-embedding-004`).
+*   **Model:** Sends text to Google's Vertex AI (configured via `GEMINI_EMBEDDING_MODEL`, e.g., `text-embedding-004` or `gemini-embedding-001`).
 *   **Storage:** The resulting 768-dimensional vectors are stored as properties on `Function` nodes, enabling semantic search and clustering.
 
 ### Phase 3: RPG Construction (Intent Generation)

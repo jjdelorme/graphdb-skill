@@ -77,8 +77,18 @@ func handleIngest(args []string) {
 	edgesPtr := fs.String("edges", "", "Output file path for edges")
 	projectPtr := fs.String("project", "", "GCP Project ID for Vertex AI")
 	locationPtr := fs.String("location", "us-central1", "GCP Location for Vertex AI")
+	modelPtr := fs.String("model", "", "Embedding model name")
 	
 	fs.Parse(args)
+
+	cfg := config.LoadConfig()
+	model := *modelPtr
+	if model == "" {
+		model = cfg.GeminiEmbeddingModel
+	}
+	if model == "" {
+		model = "text-embedding-004"
+	}
 
 	var emitter storage.Emitter
 	if *nodesPtr != "" || *edgesPtr != "" {
@@ -105,7 +115,7 @@ func handleIngest(args []string) {
 	defer emitter.Close()
 
 	// Setup Embedder
-	embedder := setupEmbedder(*projectPtr, *locationPtr)
+	embedder := setupEmbedder(*projectPtr, *locationPtr, model)
 
 	// Setup Walker
 	walker := ingest.NewWalker(*workersPtr, embedder, emitter)
@@ -162,12 +172,22 @@ func handleEnrichFeatures(args []string) {
 	dirPtr := fs.String("dir", ".", "Directory to analyze")
 	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
+	modelPtr := fs.String("model", "", "Embedding model name")
 	inputPtr := fs.String("input", "graph.jsonl", "Input graph file")
 	outputPtr := fs.String("output", "rpg.jsonl", "Output file for RPG nodes and edges")
 	batchSizePtr := fs.Int("batch-size", 20, "Batch size for LLM feature extraction")
 	clusterModePtr := fs.String("cluster-mode", "file", "Clustering mode: 'file' (structural) or 'semantic' (embedding-based)")
 
 	fs.Parse(args)
+
+	cfg := config.LoadConfig()
+	model := *modelPtr
+	if model == "" {
+		model = cfg.GeminiEmbeddingModel
+	}
+	if model == "" {
+		model = "text-embedding-004"
+	}
 
 	log.Println("Starting feature enrichment...")
 
@@ -203,7 +223,7 @@ func handleEnrichFeatures(args []string) {
 	var clusterer rpg.Clusterer
 	switch *clusterModePtr {
 	case "semantic":
-		embedder := setupEmbedder(*projectPtr, *locationPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, model)
 		clusterer = &rpg.EmbeddingClusterer{Embedder: embedder}
 		log.Println("Using semantic clustering (embedding-based)")
 	default:
@@ -225,7 +245,7 @@ func handleEnrichFeatures(args []string) {
 
 	// 5. Setup Enricher
 	summarizer := setupSummarizer(*projectPtr, *locationPtr)
-	embedder := setupEmbedder(*projectPtr, *locationPtr)
+	embedder := setupEmbedder(*projectPtr, *locationPtr, model)
 	enricher := &rpg.Enricher{
 		Client:   summarizer,
 		Embedder: embedder,
@@ -526,10 +546,19 @@ func handleQuery(args []string) {
 	// Embedder args for 'features' type
 	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
+	modelPtr := fs.String("model", "", "Embedding model name")
 
 	fs.Parse(args)
 
 	cfg := config.LoadConfig()
+	model := *modelPtr
+	if model == "" {
+		model = cfg.GeminiEmbeddingModel
+	}
+	if model == "" {
+		model = "text-embedding-004"
+	}
+
 	if cfg.Neo4jURI == "" {
 		log.Fatal("NEO4J_URI environment variable is not set")
 	}
@@ -549,7 +578,7 @@ func handleQuery(args []string) {
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'search-features'")
 		}
-		embedder := setupEmbedder(*projectPtr, *locationPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, model)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			 log.Fatalf("Embedding failed: %v", err)
@@ -560,7 +589,7 @@ func handleQuery(args []string) {
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'search-similar'")
 		}
-		embedder := setupEmbedder(*projectPtr, *locationPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, model)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			 log.Fatalf("Embedding failed: %v", err)
@@ -578,7 +607,7 @@ func handleQuery(args []string) {
 		}
 
 		// 2. Semantic Search (Dependency Layer)
-		embedder := setupEmbedder(*projectPtr, *locationPtr)
+		embedder := setupEmbedder(*projectPtr, *locationPtr, model)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			log.Printf("Warning: Embedding failed for hybrid search: %v", err)

@@ -2,7 +2,7 @@
 
 **Goal:** Enhance the existing Code Property Graph (CPG) with semantic vector embeddings to generate **Refactoring-Ready Context**. This allows the agent to identify implicit dependencies (cross-language calls, logical clones) that static analysis misses, facilitating safe refactoring of legacy code.
 
-**Target Model:** `gemini-embedding-001` via Vertex AI.
+**Target Model:** Configurable via `GEMINI_EMBEDDING_MODEL` (e.g., `gemini-embedding-001`, `text-embedding-004`) via Vertex AI.
 **Library:** `google.genai` (Node.js SDK) or Google Cloud Vertex AI REST API.
 **Authentication:** **Vertex AI ONLY** (Google Application Default Credentials - ADC).
 **Database:** Neo4j Community Edition (v5.15+ required for Vector Indexes).
@@ -31,7 +31,7 @@ We will move from a pure **Structural Graph** to a **Hybrid Graph**.
 3.  **`query_graph.js` (Enhanced)**: updated to support a `hybrid-context` command that merges structural neighbors with semantic neighbors.
 
 ### Schema Changes (Neo4j)
-*   **Node Property**: `Function.embedding` (Vector<Float>, 768 dimensions for `gemini-embedding-001`).
+*   **Node Property**: `Function.embedding` (Vector<Float>, 768 dimensions).
 *   **Index**: `function_embeddings` (Vector Index).
 
 ---
