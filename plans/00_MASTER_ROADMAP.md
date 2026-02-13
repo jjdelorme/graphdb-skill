@@ -96,12 +96,12 @@
 
 ### Campaign 5: Structural Integrity (The "Linking" Fix)
 **Goal:** Remediation of the "File-Local" linking bug found in all parsers (Java, C#, C++, TS). Currently, parsers assume dependencies exist in the caller's file, breaking the graph. We must implement Import Parsing and Symbol Resolution to enable cross-file edges.
-**Status:** **CRITICAL PRIORITY** (Next)
+**Status:** **Completed**
 **Key Deliverables:**
-- [ ] **Java:** Import parsing & Type Resolution.
-- [ ] **Systemic:** Apply resolution logic to C#, C++, TypeScript.
-- [ ] **Plan:** Ref: `plans/feat_systemic_dependency_resolution.md`.
-- [ ] **Validation:** Verify "Impact Analysis" actually traverses files.
+- [x] **Java:** Import parsing & Type Resolution.
+- [x] **Systemic:** Apply resolution logic to C#, C++, TypeScript.
+- [x] **Plan:** Ref: `plans/feat_systemic_dependency_resolution.md`.
+- [x] **Validation:** Verify "Impact Analysis" actually traverses files.
 
 ### Campaign 6: The Spanner Backend (Storage Swap)
 **Goal:** Establish the multi-tenant, immutable storage layer using Google Spanner Graph by swapping the storage implementation.
