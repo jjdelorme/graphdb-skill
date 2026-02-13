@@ -287,13 +287,6 @@ func handleEnrichFeatures(args []string) {
 	}
 
 	log.Printf("Successfully emitted %d nodes and %d edges to %s", len(nodes), len(allEdges), *outputPtr)
-
-	// 9. Output (JSON Tree to stdout for debugging/UI)
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(features); err != nil {
-		log.Fatalf("Failed to encode features: %v", err)
-	}
 }
 
 func handleImport(args []string) {
