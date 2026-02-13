@@ -75,16 +75,17 @@ func handleIngest(args []string) {
 	outputPtr := fs.String("output", "graph.jsonl", "Output file path (combined)")
 	nodesPtr := fs.String("nodes", "", "Output file path for nodes")
 	edgesPtr := fs.String("edges", "", "Output file path for edges")
-	locationPtr := fs.String("location", "us-central1", "GCP Location for Vertex AI")
-	modelPtr := fs.String("model", "", "Embedding model name")
 	
 	fs.Parse(args)
 
 	cfg := config.LoadConfig()
-	model := *modelPtr
-	if model == "" {
-		model = cfg.GeminiEmbeddingModel
+	
+	loc := cfg.GoogleCloudLocation
+	if loc == "" {
+		loc = "us-central1"
 	}
+
+	model := cfg.GeminiEmbeddingModel
 	if model == "" {
 		model = "gemini-embedding-001"
 	}
@@ -114,7 +115,7 @@ func handleIngest(args []string) {
 	defer emitter.Close()
 
 	// Setup Embedder
-	embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
+	embedder := setupEmbedder(cfg.GoogleCloudProject, loc, model)
 
 	// Setup Walker
 	walker := ingest.NewWalker(*workersPtr, embedder, emitter)
@@ -169,8 +170,6 @@ func handleIngest(args []string) {
 func handleEnrichFeatures(args []string) {
 	fs := flag.NewFlagSet("enrich-features", flag.ExitOnError)
 	dirPtr := fs.String("dir", ".", "Directory to analyze")
-	locationPtr := fs.String("location", "us-central1", "GCP Location")
-	modelPtr := fs.String("model", "", "Embedding model name")
 	inputPtr := fs.String("input", "graph.jsonl", "Input graph file")
 	outputPtr := fs.String("output", "rpg.jsonl", "Output file for RPG nodes and edges")
 	batchSizePtr := fs.Int("batch-size", 20, "Batch size for LLM feature extraction")
@@ -179,10 +178,13 @@ func handleEnrichFeatures(args []string) {
 	fs.Parse(args)
 
 	cfg := config.LoadConfig()
-	model := *modelPtr
-	if model == "" {
-		model = cfg.GeminiEmbeddingModel
+
+	loc := cfg.GoogleCloudLocation
+	if loc == "" {
+		loc = "us-central1"
 	}
+
+	model := cfg.GeminiEmbeddingModel
 	if model == "" {
 		model = "gemini-embedding-001"
 	}
@@ -197,7 +199,7 @@ func handleEnrichFeatures(args []string) {
 	log.Printf("Loaded %d functions from %s", len(functions), *inputPtr)
 
 	// 2. Extract atomic features per function
-	extractor := setupExtractor(cfg.GoogleCloudProject, *locationPtr)
+	extractor := setupExtractor(cfg.GoogleCloudProject, loc)
 	log.Printf("Extracting atomic features (batch size: %d)...", *batchSizePtr)
 	for i := range functions {
 		fn := &functions[i]
@@ -221,7 +223,7 @@ func handleEnrichFeatures(args []string) {
 	var clusterer rpg.Clusterer
 	switch *clusterModePtr {
 	case "semantic":
-		embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
+		embedder := setupEmbedder(cfg.GoogleCloudProject, loc, model)
 		clusterer = &rpg.EmbeddingClusterer{Embedder: embedder}
 		log.Println("Using semantic clustering (embedding-based)")
 	default:
@@ -242,8 +244,8 @@ func handleEnrichFeatures(args []string) {
 	}
 
 	// 5. Setup Enricher
-	summarizer := setupSummarizer(cfg.GoogleCloudProject, *locationPtr)
-	embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
+	summarizer := setupSummarizer(cfg.GoogleCloudProject, loc)
+	embedder := setupEmbedder(cfg.GoogleCloudProject, loc, model)
 	enricher := &rpg.Enricher{
 		Client:   summarizer,
 		Embedder: embedder,
