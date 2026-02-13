@@ -65,7 +65,11 @@ func (v *VertexEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 			batch = append(batch, genai.Text(t)...)
 		}
 
-		resp, err := v.Client.EmbedContent(ctx, v.Model, batch, nil)
+		config := &genai.EmbedContentConfig{
+			TaskType: "RETRIEVAL_DOCUMENT",
+		}
+
+		resp, err := v.Client.EmbedContent(ctx, v.Model, batch, config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to embed content batch (chunk %d-%d): %w", i, end, err)
 		}
