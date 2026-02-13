@@ -75,7 +75,6 @@ func handleIngest(args []string) {
 	outputPtr := fs.String("output", "graph.jsonl", "Output file path (combined)")
 	nodesPtr := fs.String("nodes", "", "Output file path for nodes")
 	edgesPtr := fs.String("edges", "", "Output file path for edges")
-	projectPtr := fs.String("project", "", "GCP Project ID for Vertex AI")
 	locationPtr := fs.String("location", "us-central1", "GCP Location for Vertex AI")
 	modelPtr := fs.String("model", "", "Embedding model name")
 	
@@ -115,7 +114,7 @@ func handleIngest(args []string) {
 	defer emitter.Close()
 
 	// Setup Embedder
-	embedder := setupEmbedder(*projectPtr, *locationPtr, model)
+	embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
 
 	// Setup Walker
 	walker := ingest.NewWalker(*workersPtr, embedder, emitter)
@@ -170,7 +169,6 @@ func handleIngest(args []string) {
 func handleEnrichFeatures(args []string) {
 	fs := flag.NewFlagSet("enrich-features", flag.ExitOnError)
 	dirPtr := fs.String("dir", ".", "Directory to analyze")
-	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
 	modelPtr := fs.String("model", "", "Embedding model name")
 	inputPtr := fs.String("input", "graph.jsonl", "Input graph file")
@@ -199,7 +197,7 @@ func handleEnrichFeatures(args []string) {
 	log.Printf("Loaded %d functions from %s", len(functions), *inputPtr)
 
 	// 2. Extract atomic features per function
-	extractor := setupExtractor(*projectPtr, *locationPtr)
+	extractor := setupExtractor(cfg.GoogleCloudProject, *locationPtr)
 	log.Printf("Extracting atomic features (batch size: %d)...", *batchSizePtr)
 	for i := range functions {
 		fn := &functions[i]
@@ -223,7 +221,7 @@ func handleEnrichFeatures(args []string) {
 	var clusterer rpg.Clusterer
 	switch *clusterModePtr {
 	case "semantic":
-		embedder := setupEmbedder(*projectPtr, *locationPtr, model)
+		embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
 		clusterer = &rpg.EmbeddingClusterer{Embedder: embedder}
 		log.Println("Using semantic clustering (embedding-based)")
 	default:
@@ -244,8 +242,8 @@ func handleEnrichFeatures(args []string) {
 	}
 
 	// 5. Setup Enricher
-	summarizer := setupSummarizer(*projectPtr, *locationPtr)
-	embedder := setupEmbedder(*projectPtr, *locationPtr, model)
+	summarizer := setupSummarizer(cfg.GoogleCloudProject, *locationPtr)
+	embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
 	enricher := &rpg.Enricher{
 		Client:   summarizer,
 		Embedder: embedder,
@@ -546,7 +544,6 @@ func handleQuery(args []string) {
 	directionPtr := fs.String("direction", "outgoing", "Traversal direction: incoming, outgoing, both")
 	
 	// Embedder args for 'features' type
-	projectPtr := fs.String("project", "", "GCP Project ID")
 	locationPtr := fs.String("location", "us-central1", "GCP Location")
 	modelPtr := fs.String("model", "", "Embedding model name")
 
@@ -580,7 +577,7 @@ func handleQuery(args []string) {
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'search-features'")
 		}
-		embedder := setupEmbedder(*projectPtr, *locationPtr, model)
+		embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			 log.Fatalf("Embedding failed: %v", err)
@@ -591,7 +588,7 @@ func handleQuery(args []string) {
 		if *targetPtr == "" {
 			log.Fatal("-target is required for 'search-similar'")
 		}
-		embedder := setupEmbedder(*projectPtr, *locationPtr, model)
+		embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			 log.Fatalf("Embedding failed: %v", err)
@@ -609,7 +606,7 @@ func handleQuery(args []string) {
 		}
 
 		// 2. Semantic Search (Dependency Layer)
-		embedder := setupEmbedder(*projectPtr, *locationPtr, model)
+		embedder := setupEmbedder(cfg.GoogleCloudProject, *locationPtr, model)
 		embeddings, err := embedder.EmbedBatch([]string{*targetPtr})
 		if err != nil {
 			log.Printf("Warning: Embedding failed for hybrid search: %v", err)

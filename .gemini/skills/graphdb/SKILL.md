@@ -16,7 +16,7 @@ You will use the `graphdb` Go binary directly.
 
 ### Installation
 The skill relies on a pre-compiled Go binary (`./scripts/graphdb`).
-If it does not exist, build it from the project root: `go build -o .gemini/skills/graphdb/scripts/graphdb cmd/graphdb/main.go`
+If it does not exist, build it from the project root: `go build -o .gemini/skills/graphdb/scripts/graphdb ./cmd/graphdb`
 
 ### Environment Variables
 The tool automatically inherits the following environment variables. Assume they are already configured correctly. Do not manually verify, echo, or debug these variables unless the tool explicitly fails with a configuration error.
@@ -38,7 +38,7 @@ Before starting a full rebuild, verify if the graph is already in sync with your
 **Step 1: Ingest (Parse & Embed):**
 Scans code, generates embeddings, and creates a graph JSONL file.
 ```bash
-./scripts/graphdb ingest -dir . -output graph.jsonl -project $GOOGLE_CLOUD_PROJECT
+./scripts/graphdb ingest -dir . -output graph.jsonl
 ```
 *   *Options:*
     *   `-workers`: Concurrency level (default: 4).
@@ -48,7 +48,7 @@ Scans code, generates embeddings, and creates a graph JSONL file.
 **Step 2: Enrich (Build Intent Layer):**
 Groups code into high-level features (RPG) using LLMs.
 ```bash
-./scripts/graphdb enrich-features -input graph.jsonl -output rpg.jsonl -cluster-mode semantic -project $GOOGLE_CLOUD_PROJECT
+./scripts/graphdb enrich-features -input graph.jsonl -output rpg.jsonl -cluster-mode semantic
 ```
 *   *Options:* `-cluster-mode` (`file` or `semantic`).
 
