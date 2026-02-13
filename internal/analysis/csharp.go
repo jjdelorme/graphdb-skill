@@ -36,6 +36,12 @@ func (p *CSharpParser) Parse(filePath string, content []byte) ([]*graph.Node, []
 		(method_declaration name: (identifier) @function.name) @function.def
 		(constructor_declaration name: (identifier) @function.name) @function.def
 		(local_function_statement name: (identifier) @function.name) @function.def
+
+		(field_declaration) @field.declarator
+		(property_declaration name: (identifier) @field.name)
+
+		(using_directive (qualified_name) @using.namespace)
+		(using_directive (identifier) @using.namespace)
 	`
 
 	qDef, err := sitter.NewQuery([]byte(defQueryStr), csharp.GetLanguage())
@@ -50,6 +56,8 @@ func (p *CSharpParser) Parse(filePath string, content []byte) ([]*graph.Node, []
 	qcDef.Exec(qDef, tree.RootNode())
 
 	var nodes []*graph.Node
+	var extraEdges []*graph.Edge // Store inheritance edges here
+	var usings []string
 
 	for {
 		m, ok := qcDef.NextMatch()
@@ -60,32 +68,115 @@ func (p *CSharpParser) Parse(filePath string, content []byte) ([]*graph.Node, []
 		for _, c := range m.Captures {
 			captureName := qDef.CaptureNameForId(c.Index)
 
-			// Only process the name capture to create the node
-			if !strings.HasSuffix(captureName, ".name") {
+			if captureName == "using.namespace" {
+				usings = append(usings, c.Node.Content(content))
 				continue
 			}
 
-			nodeName := c.Node.Content(content)
+			var nodeNames []string
+			if strings.HasSuffix(captureName, ".name") {
+				nodeNames = append(nodeNames, c.Node.Content(content))
+			} else if captureName == "field.declarator" {
+				// c.Node is field_declaration
+				count := c.Node.ChildCount()
+				for i := 0; i < int(count); i++ {
+					child := c.Node.Child(i)
+					if child.Type() == "variable_declarator" {
+						name := extractNameFromDeclarator(child, content)
+						if name != "" {
+							nodeNames = append(nodeNames, name)
+						}
+					} else if child.Type() == "variable_declaration" {
+						vCount := child.ChildCount()
+						for k := 0; k < int(vCount); k++ {
+							vChild := child.Child(k)
+							if vChild.Type() == "variable_declarator" {
+								name := extractNameFromDeclarator(vChild, content)
+								if name != "" {
+									nodeNames = append(nodeNames, name)
+								}
+							}
+						}
+					}
+				}
+			}
 
-			var label string
-			if strings.HasPrefix(captureName, "class") {
-				label = "Class"
-			} else if strings.HasPrefix(captureName, "function") {
-				label = "Function"
-			} else {
+			if len(nodeNames) == 0 {
 				continue
 			}
 
-			n := &graph.Node{
-				ID:    fmt.Sprintf("%s:%s", filePath, nodeName),
-				Label: label,
-				Properties: map[string]interface{}{
+			namespace := findEnclosingNamespace(c.Node, content)
+
+			for _, nodeName := range nodeNames {
+				var label string
+				var fullID string
+				var properties = map[string]interface{}{
 					"name": nodeName,
 					"file": filePath,
 					"line": c.Node.StartPoint().Row + 1,
-				},
+				}
+
+				if strings.HasPrefix(captureName, "class") {
+					label = "Class"
+					if namespace != "" {
+						fullID = fmt.Sprintf("%s:%s.%s", filePath, namespace, nodeName)
+						properties["namespace"] = namespace
+					} else {
+						fullID = fmt.Sprintf("%s:%s", filePath, nodeName)
+					}
+
+					// Check for Inheritance (base_list)
+					// The captured node is the identifier (name). Parent is the declaration.
+					parent := c.Node.Parent()
+					if parent != nil {
+						var baseList *sitter.Node
+						baseList = parent.ChildByFieldName("base_list")
+						if baseList == nil {
+							count := parent.ChildCount()
+							for i := 0; i < int(count); i++ {
+								child := parent.Child(i)
+								if child.Type() == "base_list" {
+									baseList = child
+									break
+								}
+							}
+						}
+
+						if baseList != nil {
+							// base_list children are usually: (colon) (simple_type) ...
+							// We iterate named children to skip punctuation
+							count := baseList.NamedChildCount()
+							for i := 0; i < int(count); i++ {
+								child := baseList.NamedChild(i)
+								// We blindly take all types in base list as INHERITS for now
+								baseName := child.Content(content)
+								targetID := fmt.Sprintf("%s:%s", filePath, baseName) // Simple local assumption
+								extraEdges = append(extraEdges, &graph.Edge{
+									SourceID: fullID,
+									TargetID: targetID,
+									Type:     "INHERITS",
+								})
+							}
+						}
+					}
+
+				} else if strings.HasPrefix(captureName, "function") {
+					label = "Function"
+					fullID = fmt.Sprintf("%s:%s", filePath, nodeName)
+				} else if strings.HasPrefix(captureName, "field") {
+					label = "Field"
+					fullID = fmt.Sprintf("%s:%s", filePath, nodeName)
+				} else {
+					continue
+				}
+
+				n := &graph.Node{
+					ID:         fullID,
+					Label:      label,
+					Properties: properties,
+				}
+				nodes = append(nodes, n)
 			}
-			nodes = append(nodes, n)
 		}
 	}
 
@@ -103,6 +194,10 @@ func (p *CSharpParser) Parse(filePath string, content []byte) ([]*graph.Node, []
 		(object_creation_expression
 			type: (identifier) @call.target
 		) @call.site
+
+		(object_creation_expression
+			type: (generic_name (identifier) @call.target)
+		) @call.site
 	`
 
 	qRef, err := sitter.NewQuery([]byte(refQueryStr), csharp.GetLanguage())
@@ -119,7 +214,7 @@ func (p *CSharpParser) Parse(filePath string, content []byte) ([]*graph.Node, []
 
 	qcRef.Exec(qRef, tree.RootNode())
 
-	var edges []*graph.Edge
+	var edges []*graph.Edge = extraEdges
 
 	for {
 		m, ok := qcRef.NextMatch()
@@ -143,16 +238,69 @@ func (p *CSharpParser) Parse(filePath string, content []byte) ([]*graph.Node, []
 		if targetName != "" && callNode != nil {
 			sourceFunc := findEnclosingCSharpFunction(callNode, content)
 			if sourceFunc != "" {
-				edges = append(edges, &graph.Edge{
-					SourceID: fmt.Sprintf("%s:%s", filePath, sourceFunc),
-					TargetID: fmt.Sprintf("%s:%s", filePath, targetName),
-					Type:     "CALLS",
-				})
+				ns := findEnclosingNamespace(callNode, content)
+				candidates := resolveCandidates(targetName, usings, ns)
+				for _, cand := range candidates {
+					edges = append(edges, &graph.Edge{
+						SourceID: fmt.Sprintf("%s:%s", filePath, sourceFunc),
+						TargetID: cand, // Use the resolved candidate as ID
+						Type:     "CALLS",
+					})
+				}
 			}
 		}
 	}
 
 	return nodes, edges, nil
+}
+
+func extractNameFromDeclarator(n *sitter.Node, content []byte) string {
+	nameChild := n.ChildByFieldName("name")
+	if nameChild != nil {
+		return nameChild.Content(content)
+	}
+	count := n.ChildCount()
+	for i := 0; i < int(count); i++ {
+		if n.Child(i).Type() == "identifier" {
+			return n.Child(i).Content(content)
+		}
+	}
+	return ""
+}
+
+func resolveCandidates(name string, usings []string, currentNamespace string) []string {
+	if strings.Contains(name, ".") {
+		return []string{name}
+	}
+
+	var candidates []string
+	// Local namespace
+	if currentNamespace != "" {
+		candidates = append(candidates, fmt.Sprintf("%s.%s", currentNamespace, name))
+	} else {
+		// Global namespace
+		candidates = append(candidates, name)
+	}
+
+	for _, u := range usings {
+		candidates = append(candidates, fmt.Sprintf("%s.%s", u, name))
+	}
+
+	return candidates
+}
+
+func findEnclosingNamespace(n *sitter.Node, content []byte) string {
+	curr := n.Parent()
+	for curr != nil {
+		if curr.Type() == "namespace_declaration" || curr.Type() == "file_scoped_namespace_declaration" {
+			nameNode := curr.ChildByFieldName("name")
+			if nameNode != nil {
+				return nameNode.Content(content)
+			}
+		}
+		curr = curr.Parent()
+	}
+	return ""
 }
 
 func findEnclosingCSharpFunction(n *sitter.Node, content []byte) string {

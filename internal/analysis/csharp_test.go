@@ -54,8 +54,10 @@ public class Greeter {
 	// Verify Call Edge
 	foundCall := false
 	for _, e := range edges {
-		// Source: ...:Greet, Target: ...:WriteLine
-		if strings.HasSuffix(e.SourceID, ":Greet") && strings.HasSuffix(e.TargetID, ":WriteLine") {
+		// Source: ...:Greet
+		// Target: WriteLine OR System.WriteLine (Resolution candidates)
+		// Old behavior was ...:WriteLine. New behavior is logical ID.
+		if strings.HasSuffix(e.SourceID, ":Greet") && (strings.HasSuffix(e.TargetID, "WriteLine") || e.TargetID == "WriteLine") {
 			foundCall = true
 			break
 		}
