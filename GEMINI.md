@@ -106,3 +106,35 @@ tmux send-keys -t 0:0.2 Enter "EOF" Enter
 # 3. Run it
 tmux send-keys -t 0:0.2 "cypher-shell -u neo4j -p *DB Password* -f query.cypher" Enter
 ```
+
+### Cross-Platform Compilation (Windows)
+
+To compile the `graphdb` binary for Windows from a Linux environment (e.g., this Devbox), you must use Zig as the C cross-compiler because of the CGO dependency (`tree-sitter`).
+
+#### 1. Install Zig Locally (One-time Setup)
+```bash
+# Download and extract Zig to a local tools directory
+mkdir -p .gemini/tools && cd .gemini/tools
+curl -L -O https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
+tar -xf zig-linux-x86_64-0.13.0.tar.xz
+cd ../..
+```
+
+#### 2. Build Windows Binary
+```bash
+# Ensure Zig is in PATH
+export PATH=$PWD/.gemini/tools/zig-linux-x86_64-0.13.0:$PATH
+
+# Run Cross-Compilation
+# CGO_ENABLED=1 is required for tree-sitter
+# CC/CXX set to zig cc with the windows-gnu target
+env CGO_ENABLED=1 \
+    GOOS=windows \
+    GOARCH=amd64 \
+    CC="zig cc -target x86_64-windows-gnu" \
+    CXX="zig c++ -target x86_64-windows-gnu" \
+    go build -o dist/graphdb-win.exe ./cmd/graphdb
+```
+
+#### 3. Output
+The binary will be located at `dist/graphdb-win.exe`. It is a standalone executable with no external dependencies.
