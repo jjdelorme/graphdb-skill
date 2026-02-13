@@ -44,11 +44,11 @@ func (v *VertexEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Vertex AI typically has a limit of 250 items per batch request.
 	// We use a safe batch size of 100 to stay well within limits.
 	const batchSize = 100
-	
+
 	total := len(texts)
 	allEmbeddings := make([][]float32, 0, total)
 
@@ -57,16 +57,19 @@ func (v *VertexEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 		if end > total {
 			end = total
 		}
-		
+
 		chunkTexts := texts[i:end]
 		var batch []*genai.Content
 		for _, t := range chunkTexts {
-			// genai.Text returns []*Content (slice of content parts), usually one for simple text.
-			batch = append(batch, genai.Text(t)...)
+			if t == "" {
+				t = " "
+			}
+			batch = append(batch, genai.NewContentFromText(t, genai.RoleUser))
 		}
 
 		config := &genai.EmbedContentConfig{
-			TaskType: "RETRIEVAL_DOCUMENT",
+			TaskType:     "RETRIEVAL_DOCUMENT",
+			AutoTruncate: true,
 		}
 
 		resp, err := v.Client.EmbedContent(ctx, v.Model, batch, config)
@@ -86,8 +89,7 @@ func (v *VertexEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 			if emb != nil {
 				allEmbeddings = append(allEmbeddings, emb.Values)
 			} else {
-				// Should not happen, but safeguard
-				allEmbeddings = append(allEmbeddings, []float32{}) 
+				allEmbeddings = append(allEmbeddings, []float32{})
 			}
 		}
 	}

@@ -110,3 +110,58 @@ func TestVertexEmbedder_EmbedBatch_Empty(t *testing.T) {
 		t.Errorf("Expected nil result for nil input, got %v", res)
 	}
 }
+
+func TestVertexEmbedder_EmbedBatch_EmptyStrings(t *testing.T) {
+	mock := &mockModelClient{
+		embedFunc: func(ctx context.Context, model string, contents []*genai.Content, config *genai.EmbedContentConfig) (*genai.EmbedContentResponse, error) {
+			// Verify no empty text parts are sent
+			for i, c := range contents {
+				if len(c.Parts) == 0 {
+					t.Errorf("Content %d has no parts", i)
+					continue
+				}
+				if c.Parts[0].Text == "" {
+					t.Errorf("Content %d has empty text - should have been replaced with space", i)
+				}
+			}
+			embeddings := make([]*genai.ContentEmbedding, len(contents))
+			for i := range contents {
+				embeddings[i] = &genai.ContentEmbedding{Values: []float32{1.0}}
+			}
+			return &genai.EmbedContentResponse{Embeddings: embeddings}, nil
+		},
+	}
+
+	embedder := &VertexEmbedder{Client: mock, Model: "test-model"}
+
+	// Mix of empty and non-empty strings
+	texts := []string{"hello", "", "world", ""}
+	res, err := embedder.EmbedBatch(texts)
+	if err != nil {
+		t.Fatalf("EmbedBatch failed: %v", err)
+	}
+	if len(res) != 4 {
+		t.Errorf("Expected 4 embeddings, got %d", len(res))
+	}
+}
+
+func TestVertexEmbedder_EmbedBatch_AutoTruncate(t *testing.T) {
+	mock := &mockModelClient{
+		embedFunc: func(ctx context.Context, model string, contents []*genai.Content, config *genai.EmbedContentConfig) (*genai.EmbedContentResponse, error) {
+			if !config.AutoTruncate {
+				t.Error("AutoTruncate should be enabled")
+			}
+			embeddings := make([]*genai.ContentEmbedding, len(contents))
+			for i := range contents {
+				embeddings[i] = &genai.ContentEmbedding{Values: []float32{1.0}}
+			}
+			return &genai.EmbedContentResponse{Embeddings: embeddings}, nil
+		},
+	}
+
+	embedder := &VertexEmbedder{Client: mock, Model: "test-model"}
+	_, err := embedder.EmbedBatch([]string{"test"})
+	if err != nil {
+		t.Fatalf("EmbedBatch failed: %v", err)
+	}
+}
