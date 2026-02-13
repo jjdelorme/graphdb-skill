@@ -19,7 +19,7 @@ The skill relies on a pre-compiled Go binary (`./scripts/graphdb`).
 If it does not exist, build it from the project root: `go build -o .gemini/skills/graphdb/scripts/graphdb cmd/graphdb/main.go`
 
 ### Environment Variables
-Ensure the following are set (typically in `.env` or your session):
+The tool automatically inherits the following environment variables. Assume they are already configured correctly. Do not manually verify, echo, or debug these variables unless the tool explicitly fails with a configuration error.
 *   `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (Required for `import` and `query`)
 *   `GOOGLE_CLOUD_PROJECT` (Required for Vertex AI embeddings)
 *   `GOOGLE_CLOUD_LOCATION` (Default: `us-central1`)
@@ -40,21 +40,24 @@ Scans code, generates embeddings, and creates a graph JSONL file.
 ```bash
 ./scripts/graphdb ingest -dir . -output graph.jsonl -project $GOOGLE_CLOUD_PROJECT
 ```
-*   *Options:* `-workers` (concurrency), `-file-list` (specific files), `-mock-embedding` (fast, no semantic search).
+*   *Options:*
+    *   `-workers`: Concurrency level (default: 4).
+    *   `-file-list`: Process specific files from a list.
+    *   `-nodes` / `-edges`: Generate separate files for nodes and edges instead of a single output.
 
 **Step 2: Enrich (Build Intent Layer):**
 Groups code into high-level features (RPG) using LLMs.
 ```bash
 ./scripts/graphdb enrich-features -input graph.jsonl -output rpg.jsonl -cluster-mode semantic -project $GOOGLE_CLOUD_PROJECT
 ```
-*   *Options:* `-cluster-mode` (`file` or `semantic`), `-mock-extraction` (skip LLM calls).
+*   *Options:* `-cluster-mode` (`file` or `semantic`).
 
 **Step 3: Import (Load to Neo4j):**
 Loads the generated JSONL files into the active Neo4j database.
 ```bash
 ./scripts/graphdb import -input graph.jsonl -clean
-# AND/OR
-./scripts/graphdb import -input rpg.jsonl
+# OR Split Files
+./scripts/graphdb import -nodes nodes.jsonl -edges edges.jsonl -clean
 ```
 *   *Options:* `-clean` (wipe DB first), `-batch-size`.
 
@@ -65,6 +68,13 @@ The primary way to interact with the graph is via the `query` command.
 ```bash
 ./scripts/graphdb query -type <type> -target "<search_term>" [options]
 ```
+
+#### Supported Languages
+*   **C# / .NET:** `.cs`, `.vb`, `.asp`, `.aspx`, `.ascx`
+*   **C / C++:** `.c`, `.cpp`, `.cc`, `.h`, `.hpp`
+*   **Java:** `.java`
+*   **TypeScript:** `.ts`
+*   **SQL:** `.sql`
 
 #### Query Types Reference
 
@@ -80,6 +90,7 @@ The primary way to interact with the graph is via the `query` command.
 | `locate-usage` | **Trace.** Find path/usage between two functions. | Function 1 | `-target2 <Function 2>` |
 | `fetch-source` | **Read.** Fetch the source code of a function by ID/Name. | Function Name | |
 | `explore-domain` | **Discovery.** Explore the domain model around a concept. | Concept/Entity Name | |
+| `traverse` | **Raw Traversal.** Explore graph relationships directly. | Node ID / Name | `-edge-types`, `-direction`, `-depth` |
 | `status` | **Verification.** Check the git commit hash stored in the graph. | (None) | |
 
 ## Operational Guidelines

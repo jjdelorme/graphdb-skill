@@ -87,7 +87,7 @@ func handleIngest(args []string) {
 		model = cfg.GeminiEmbeddingModel
 	}
 	if model == "" {
-		model = "text-embedding-004"
+		model = "gemini-embedding-001"
 	}
 
 	var emitter storage.Emitter
@@ -186,7 +186,7 @@ func handleEnrichFeatures(args []string) {
 		model = cfg.GeminiEmbeddingModel
 	}
 	if model == "" {
-		model = "text-embedding-004"
+		model = "gemini-embedding-001"
 	}
 
 	log.Println("Starting feature enrichment...")
@@ -558,7 +558,7 @@ func handleQuery(args []string) {
 		model = cfg.GeminiEmbeddingModel
 	}
 	if model == "" {
-		model = "text-embedding-004"
+		model = "gemini-embedding-001"
 	}
 
 	if cfg.Neo4jURI == "" {

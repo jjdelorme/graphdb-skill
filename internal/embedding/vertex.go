@@ -3,14 +3,18 @@ package embedding
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"google.golang.org/genai"
 )
 
+// ModelClient defines the subset of genai.Client methods we use, allowing for testing.
+type ModelClient interface {
+	EmbedContent(ctx context.Context, model string, contents []*genai.Content, config *genai.EmbedContentConfig) (*genai.EmbedContentResponse, error)
+}
+
 // VertexEmbedder implements the Embedder interface using Google Cloud Vertex AI via the GenAI SDK.
 type VertexEmbedder struct {
-	Client *genai.Client
+	Client ModelClient
 	Model  string
 }
 
@@ -28,7 +32,7 @@ func NewVertexEmbedder(ctx context.Context, projectID, location, modelName strin
 	}
 
 	return &VertexEmbedder{
-		Client: client,
+		Client: client.Models,
 		Model:  modelName,
 	}, nil
 }
@@ -40,34 +44,47 @@ func (v *VertexEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 	}
 
 	ctx := context.Background()
-	var batch []*genai.Content
-	for _, t := range texts {
-		// genai.Text returns []*Content (slice of content parts), usually one for simple text.
-		batch = append(batch, genai.Text(t)...)
-	}
+	
+	// Vertex AI typically has a limit of 250 items per batch request.
+	// We use a safe batch size of 100 to stay well within limits.
+	const batchSize = 100
+	
+	total := len(texts)
+	allEmbeddings := make([][]float32, 0, total)
 
-	resp, err := v.Client.Models.EmbedContent(ctx, v.Model, batch, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to embed content batch: %w", err)
-	}
-
-	if resp == nil {
-		return nil, fmt.Errorf("empty response from embedding service")
-	}
-
-	if len(resp.Embeddings) != len(texts) {
-		log.Printf("Warning: requested %d embeddings, got %d", len(texts), len(resp.Embeddings))
-		// We might still return what we have, or error. 
-		// If partial, it's safer to error as alignment is lost.
-		if len(resp.Embeddings) < len(texts) {
-			return nil, fmt.Errorf("embedding count mismatch: expected %d, got %d", len(texts), len(resp.Embeddings))
+	for i := 0; i < total; i += batchSize {
+		end := i + batchSize
+		if end > total {
+			end = total
 		}
-	}
+		
+		chunkTexts := texts[i:end]
+		var batch []*genai.Content
+		for _, t := range chunkTexts {
+			// genai.Text returns []*Content (slice of content parts), usually one for simple text.
+			batch = append(batch, genai.Text(t)...)
+		}
 
-	allEmbeddings := make([][]float32, len(resp.Embeddings))
-	for i, emb := range resp.Embeddings {
-		if emb != nil {
-			allEmbeddings[i] = emb.Values
+		resp, err := v.Client.EmbedContent(ctx, v.Model, batch, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed content batch (chunk %d-%d): %w", i, end, err)
+		}
+
+		if resp == nil {
+			return nil, fmt.Errorf("empty response from embedding service for chunk %d-%d", i, end)
+		}
+
+		if len(resp.Embeddings) != len(chunkTexts) {
+			return nil, fmt.Errorf("embedding count mismatch in chunk %d-%d: expected %d, got %d", i, end, len(chunkTexts), len(resp.Embeddings))
+		}
+
+		for _, emb := range resp.Embeddings {
+			if emb != nil {
+				allEmbeddings = append(allEmbeddings, emb.Values)
+			} else {
+				// Should not happen, but safeguard
+				allEmbeddings = append(allEmbeddings, []float32{}) 
+			}
 		}
 	}
 
