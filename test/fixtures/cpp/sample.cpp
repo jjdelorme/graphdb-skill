@@ -1,12 +1,23 @@
+#include "math.h"
 #include <iostream>
 
-void hello() {
-    std::cout << "Hello";
-}
+int global_counter = 0;
 
-class Greeter {
+class Base {
 public:
-    void greet() {
-        hello();
+    int id;
+};
+
+class Derived : public Base {
+public:
+    void doWork() {
+        global_counter++;
+        id = 100;
+        int result = Math::Add(5, 10);
     }
 };
+
+void main() {
+    Derived d;
+    d.doWork();
+}
