@@ -78,7 +78,7 @@
         *   Return `[]Match` (which satisfies `any`).
 3.  **Step 2.C (The Verification):**
     *   *Action:* Compile and ensure no build errors.
-    *   *Success:* `go build ./...` passes.
+    *   *Success:* `make build` passes.
 
 ### Testing Strategy
 - **Unit Tests:** Extensive testing of `internal/tools/snippet` covering edge cases (empty files, start > end, pattern not found).

@@ -64,10 +64,10 @@ Each agent has a dedicated role and system prompt located in `.gemini/agents/`.
 
 ### Building the Go Binary
 
-The primary tool is the `graphdb` Go binary. Build it from the project root:
+The primary tool is the `graphdb` Go binary. Build it from the project root using the Makefile:
 
 ```bash
-go build -o .gemini/skills/graphdb/scripts/graphdb ./cmd/graphdb
+make build
 ```
 
 This produces `.gemini/skills/graphdb/scripts/graphdb`, which is where the Gemini CLI agent skill expects it.

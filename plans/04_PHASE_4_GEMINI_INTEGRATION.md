@@ -1,7 +1,7 @@
 # Feature Implementation Plan: Phase 4 - Gemini CLI Skill Integration
 
 **Campaign:** Gemini CLI Skill Integration (Campaign 3)
-**Goal:** Complete the modernization by wrapping the new Go binary (`bin/graphdb`) in the existing Gemini Skill interface. This allows Agents to use the high-performance Go engine without changing their behavior or tool definitions.
+**Goal:** Complete the modernization by wrapping the new Go binary (`.gemini/skills/graphdb/scripts/graphdb`) in the existing Gemini Skill interface. This allows Agents to use the high-performance Go engine without changing their behavior or tool definitions.
 **Context:** Currently, the skill relies on a suite of Node.js scripts (`extract_graph.js`, `query_graph.js`, etc.) with heavy dependencies (Tree-sitter, Neo4j Driver). We will replace the internals of these scripts to delegate work to the `graphdb` binary, effectively acting as a shim.
 
 ## 📋 Todo Checklist
@@ -26,14 +26,14 @@ We will not change the file structure or the names of the scripts immediately. T
 
 #### 1. Extraction (`extract_graph.js`)
 *   **Legacy:** `node extract_graph.js [path]`
-*   **Target:** `bin/graphdb ingest [path]`
+*   **Target:** `.gemini/skills/graphdb/scripts/graphdb ingest [path]`
 *   **Note:** The Go Ingestor combines Extraction + Enrichment.
     *   *Risk:* Enrichment cost.
     *   *Action:* Check if `graphdb ingest` has flags to control enrichment. If not, document this behavior change.
 
 #### 2. Query (`query_graph.js`)
 *   **Legacy:** `node query_graph.js <type> --target <target> ...`
-*   **Target:** `bin/graphdb query --type <type> --target <target> ...`
+*   **Target:** `.gemini/skills/graphdb/scripts/graphdb query --type <type> --target <target> ...`
 *   **Mappings:**
     *   `hybrid-context` -> `graphdb query --type=hybrid-context`
     *   `test-context` -> `graphdb query --type=test-context` (or `neighbors`)
@@ -55,21 +55,21 @@ We will not change the file structure or the names of the scripts immediately. T
 ## 📝 Implementation Plan
 
 ### Prerequisites
-*   `bin/graphdb` must be built and executable.
+*   `.gemini/skills/graphdb/scripts/graphdb` must be built and executable.
 *   Go Ingestor and Query Engine (Campaign 1 & 2) must be complete (verified).
 
 ### Step-by-Step Implementation
 
 #### Phase 4.1: The Wrappers
 1.  **Step 4.1.A (Verification):** Verify CLI Help.
-    *   *Action:* Run `bin/graphdb --help`, `bin/graphdb ingest --help`, `bin/graphdb query --help`, `bin/graphdb enrich-features --help`.
+    *   *Action:* Run `.gemini/skills/graphdb/scripts/graphdb --help`, `.gemini/skills/graphdb/scripts/graphdb ingest --help`, `.gemini/skills/graphdb/scripts/graphdb query --help`, `.gemini/skills/graphdb/scripts/graphdb enrich-features --help`.
     *   *Goal:* Confirm flag names match our assumptions.
 2.  **Step 4.1.B (Extraction):** Shim `extract_graph.js`.
     *   *Action:* Replace content of `extraction/extract_graph.js`.
     *   *Code:*
         ```javascript
         const { execSync } = require('child_process');
-        // Resolve path to bin/graphdb
+        // Resolve path to .gemini/skills/graphdb/scripts/graphdb
         // execSync(`${binPath} ingest ...`, { stdio: 'inherit' });
         ```
     *   *Test:* Run `node extraction/extract_graph.js` on a small folder. Verify `nodes.jsonl` is created.

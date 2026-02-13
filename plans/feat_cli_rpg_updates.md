@@ -55,11 +55,11 @@ The current `cmd/graphdb/main.go` supports `ingest` and `query` commands. The `q
     *   *Action:* Add `test-context` alias.
 
 ### Testing Strategy
-*   Run `go build ./cmd/graphdb`.
-*   Run `./graphdb enrich-features ...`.
-*   Run `./graphdb query -type search-features ...`.
-*   Run `./graphdb query -type search-similar ...`.
-*   Run `./graphdb query -type hybrid-context ...`.
+*   Run `make build`.
+*   Run `.gemini/skills/graphdb/scripts/graphdb enrich-features ...`.
+*   Run `.gemini/skills/graphdb/scripts/graphdb query -type search-features ...`.
+*   Run `.gemini/skills/graphdb/scripts/graphdb query -type search-similar ...`.
+*   Run `.gemini/skills/graphdb/scripts/graphdb query -type hybrid-context ...`.
 
 ## 🎯 Success Criteria
 *   `enrich-features` command runs and produces output.

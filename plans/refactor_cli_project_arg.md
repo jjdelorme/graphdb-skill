@@ -59,10 +59,10 @@ The flag allows overriding the GCP Project ID. However, the modernization strate
     *   *Action:* Check `README.md` for stale examples and update if necessary.
 
 ### Testing Strategy
-1.  **Build CLI:** `go build -tags test_mocks -o bin/graphdb_test cmd/graphdb/main.go`.
-2.  **Run Ingest (Mock):** `./bin/graphdb_test ingest -dir test/fixtures/typescript -output /dev/null`.
+1.  **Build CLI:** `make build-mocks`.
+2.  **Run Ingest (Mock):** `./.gemini/skills/graphdb/scripts/graphdb_test ingest -dir test/fixtures/typescript -output /dev/null`.
     *   *Expectation:* Should run successfully without `-project` flag (picking up mock mode or env var).
-3.  **Run Query (Mock):** `./bin/graphdb_test query -type search-features -target "test"`.
+3.  **Run Query (Mock):** `./.gemini/skills/graphdb/scripts/graphdb_test query -type search-features -target "test"`.
     *   *Expectation:* Should run without error (using mock embedder).
 
 ## 🎯 Success Criteria

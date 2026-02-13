@@ -16,7 +16,7 @@ You will use the `graphdb` Go binary directly.
 
 ### Installation
 The skill relies on a pre-compiled Go binary (`./scripts/graphdb`).
-If it does not exist, build it from the project root: `go build -o .gemini/skills/graphdb/scripts/graphdb ./cmd/graphdb`
+If it does not exist, build it from the project root: `make build`
 
 ### Environment Variables
 The tool automatically inherits the following environment variables. Assume they are already configured correctly. Do not manually verify, echo, or debug these variables unless the tool explicitly fails with a configuration error.

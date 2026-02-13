@@ -49,7 +49,7 @@ cd ../../../ # Return to root
 ```
 
 **Build the GraphDB Go Binary:**
-The skill relies on a compiled Go binary. Build it from the project root using the Makefile:
+The skill relies on a compiled Go binary. It MUST be built to the `.gemini/skills/graphdb/scripts/` directory. This is handled automatically by the Makefile. Always build from the project root:
 
 ```bash
 make build

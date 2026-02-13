@@ -62,7 +62,7 @@ To protect against future Spanner migration, we rely on the **Provider Pattern**
 
 #### Phase 3: Verification
 4.  **Step 3.A (Manual Verification):**
-    *   *Action:* Run `./bin/graphdb query -type traverse -target "SomeFunction" -edge-types "CALLS" -direction outgoing -depth 2`.
+    *   *Action:* Run `./.gemini/skills/graphdb/scripts/graphdb query -type traverse -target "SomeFunction" -edge-types "CALLS" -direction outgoing -depth 2`.
     *   *Success:* Returns JSON list of paths.
 
 ### Testing Strategy

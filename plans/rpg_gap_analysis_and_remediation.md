@@ -261,8 +261,8 @@ The `DirectoryDomainDiscoverer` is a reasonable heuristic for the top level (dom
 go test ./internal/rpg/...
 
 # Build and run enrichment on the project itself
-go build -o bin/graphdb cmd/graphdb/main.go
-bin/graphdb enrich-features -dir . -input graph.jsonl -output rpg.jsonl -mock-embedding
+make build
+.gemini/skills/graphdb/scripts/graphdb enrich-features -dir . -input graph.jsonl -output rpg.jsonl -mock-embedding
 
 # Verify:
 # - IMPLEMENTS edges: SourceID=function, TargetID=feature
@@ -274,7 +274,7 @@ bin/graphdb enrich-features -dir . -input graph.jsonl -output rpg.jsonl -mock-em
 ### After Phase 2:
 ```bash
 # Run with real LLM
-bin/graphdb enrich-features -dir . -input graph.jsonl -output rpg.jsonl -project $PROJECT -token $TOKEN
+.gemini/skills/graphdb/scripts/graphdb enrich-features -dir . -input graph.jsonl -output rpg.jsonl -project $PROJECT -token $TOKEN
 
 # Verify function nodes have atomic_features property
 ```
@@ -282,8 +282,8 @@ bin/graphdb enrich-features -dir . -input graph.jsonl -output rpg.jsonl -project
 ### After Phase 3:
 ```bash
 # Compare FileClusterer vs EmbeddingClusterer output
-bin/graphdb enrich-features --cluster-mode=file ...
-bin/graphdb enrich-features --cluster-mode=semantic ...
+.gemini/skills/graphdb/scripts/graphdb enrich-features --cluster-mode=file ...
+.gemini/skills/graphdb/scripts/graphdb enrich-features --cluster-mode=semantic ...
 
 # Manual inspection: are semantic clusters more coherent than file-based?
 ```
@@ -291,6 +291,6 @@ bin/graphdb enrich-features --cluster-mode=semantic ...
 ### After Phase 5:
 ```bash
 # Load into Neo4j and test queries
-bin/graphdb query --type search-features --target "clustering" ...
-bin/graphdb query --type explore-domain --target "domain-rpg"
+.gemini/skills/graphdb/scripts/graphdb query --type search-features --target "clustering" ...
+.gemini/skills/graphdb/scripts/graphdb query --type explore-domain --target "domain-rpg"
 ```
