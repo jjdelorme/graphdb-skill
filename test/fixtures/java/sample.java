@@ -1,26 +1,31 @@
 package com.example;
 
-public class Sample {
-    private int value;
+import java.util.List;
+import java.util.ArrayList;
 
-    public Sample(int value) {
-        this.value = value;
-    }
-
-    public void process() {
-        helper();
-    }
-
-    private void helper() {
-        System.out.println("Processing: " + value);
-    }
-
-    public static void main(String[] args) {
-        Sample sample = new Sample(10);
-        sample.process();
-    }
+class Base {
+    protected int baseValue;
 }
 
 interface Worker {
     void doWork();
+}
+
+public class Sample extends Base implements Worker {
+    private List<String> items;
+    private Worker helper;
+
+    public Sample(Worker helper) {
+        this.helper = helper;
+        this.items = new ArrayList<>();
+    }
+
+    public void doWork() {
+        helper.doWork();
+        System.out.println("Items: " + items.size());
+    }
+
+    public void addItem(String item) {
+        items.add(item);
+    }
 }

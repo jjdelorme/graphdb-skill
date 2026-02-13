@@ -1,6 +1,7 @@
 package analysis_test
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,68 +20,88 @@ func TestParseJava(t *testing.T) {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
 
-	content := []byte(`package com.example;
-
-public class Sample {
-    private int value;
-
-    public Sample(int value) {
-        this.value = value;
-    }
-
-    public void process() {
-        helper();
-    }
-
-    private void helper() {
-        System.out.println("Processing: " + value);
-    }
-}`)
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		t.Fatalf("Failed to read fixture: %v", err)
+	}
 
 	nodes, edges, err := parser.Parse(absPath, content)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	foundSample := false
-	foundProcess := false
-	foundHelper := false
-
-	for _, n := range nodes {
-		name, _ := n.Properties["name"].(string)
-		if name == "Sample" && n.Label == "Class" {
-			foundSample = true
+	// Helper to find node by name and label
+	findNode := func(name, label string) bool {
+		for _, n := range nodes {
+			nName, _ := n.Properties["name"].(string)
+			if nName == name && n.Label == label {
+				return true
+			}
 		}
-		if name == "process" && n.Label == "Function" {
-			foundProcess = true
-		}
-		if name == "helper" && n.Label == "Function" {
-			foundHelper = true
-		}
+		return false
 	}
 
-	if !foundSample {
+	// 1. Verify Structure
+	if !findNode("Sample", "Class") {
 		t.Errorf("Expected Class 'Sample' not found")
 	}
-	if !foundProcess {
-		t.Errorf("Expected Function 'process' not found")
+	if !findNode("Base", "Class") {
+		t.Errorf("Expected Class 'Base' not found")
 	}
-	if !foundHelper {
-		t.Errorf("Expected Function 'helper' not found")
+	if !findNode("Worker", "Interface") {
+		t.Errorf("Expected Interface 'Worker' not found")
+	}
+	if !findNode("items", "Field") {
+		t.Errorf("Expected Field 'items' not found")
+	}
+	if !findNode("helper", "Field") {
+		t.Errorf("Expected Field 'helper' not found")
 	}
 
-	// Verify Call Edge from process -> helper
-	foundCall := false
+	// 2. Verify Inheritance / Implementation Edges
+	foundExtends := false
+	foundImplements := false
+
 	for _, e := range edges {
-		// Source: ...:process, Target: ...:helper
-		// Note: The IDs depend on how the parser constructs them. Usually file path + name + line/col or similar.
-		// We'll check for suffix for robustness.
-		if strings.HasSuffix(e.SourceID, ":process") && strings.HasSuffix(e.TargetID, ":helper") && e.Type == "CALLS" {
-			foundCall = true
-			break
+		// We expect Sample -> Base (EXTENDS)
+		if strings.Contains(e.SourceID, "Sample") && strings.Contains(e.TargetID, "Base") && e.Type == "EXTENDS" {
+			foundExtends = true
+		}
+		// We expect Sample -> Worker (IMPLEMENTS)
+		if strings.Contains(e.SourceID, "Sample") && strings.Contains(e.TargetID, "Worker") && e.Type == "IMPLEMENTS" {
+			foundImplements = true
 		}
 	}
-	if !foundCall {
-		t.Errorf("Expected Call Edge from process to helper not found")
+
+	if !foundExtends {
+		t.Errorf("Expected EXTENDS edge from Sample to Base not found")
 	}
+	if !foundImplements {
+		t.Errorf("Expected IMPLEMENTS edge from Sample to Worker not found")
+	}
+
+	// 3. Verify Import Resolution / Uses
+    // Check call to helper.doWork() -> should link to Worker:doWork
+    foundWorkerCall := false
+    // Check call to items.size() -> should link to java.util.List:size
+    foundListCall := false
+
+    for _, e := range edges {
+        if e.Type == "CALLS" {
+            // Check TargetID contains "Worker:doWork" (ignoring full package prefix issues for now, just substring)
+            if strings.Contains(e.TargetID, "Worker:doWork") {
+                foundWorkerCall = true
+            }
+            if strings.Contains(e.TargetID, "java.util.List:size") {
+                foundListCall = true
+            }
+        }
+    }
+
+    if !foundWorkerCall {
+        t.Errorf("Expected CALLS edge to Worker:doWork not found")
+    }
+    if !foundListCall {
+        t.Errorf("Expected CALLS edge to java.util.List:size not found")
+    }
 }
