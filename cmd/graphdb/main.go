@@ -542,6 +542,8 @@ func handleQuery(args []string) {
 	depthPtr := fs.Int("depth", 1, "Traversal depth")
 	limitPtr := fs.Int("limit", 10, "Result limit")
 	modulePtr := fs.String("module", ".*", "Module pattern for seams")
+	edgeTypesPtr := fs.String("edge-types", "", "Comma-separated relationship types for traverse")
+	directionPtr := fs.String("direction", "outgoing", "Traversal direction: incoming, outgoing, both")
 	
 	// Embedder args for 'features' type
 	projectPtr := fs.String("project", "", "GCP Project ID")
@@ -668,6 +670,19 @@ func handleQuery(args []string) {
 			log.Fatal("-target is required for 'explore-domain'")
 		}
 		result, err = provider.ExploreDomain(*targetPtr)
+
+	case "traverse":
+		if *targetPtr == "" {
+			log.Fatal("-target is required for 'traverse'")
+		}
+		dir := query.Outgoing
+		switch strings.ToLower(*directionPtr) {
+		case "incoming":
+			dir = query.Incoming
+		case "both":
+			dir = query.Both
+		}
+		result, err = provider.Traverse(*targetPtr, *edgeTypesPtr, dir, *depthPtr)
 
 	case "status":
 		commit, err := provider.GetGraphState()

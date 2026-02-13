@@ -6,6 +6,7 @@ import (
 	"graphdb/internal/config"
 	"graphdb/internal/graph"
 	"graphdb/internal/tools/snippet"
+	"strings"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
@@ -51,8 +52,102 @@ func (p *Neo4jProvider) FindNode(label string, property string, value string) (*
 
 // Traverse traverses the graph from a start node.
 func (p *Neo4jProvider) Traverse(startNodeID string, relationship string, direction Direction, depth int) ([]*graph.Path, error) {
-	// TODO: Implement in Phase 2.2+
-	return nil, nil
+	// 1. Format relationships for Cypher (e.g., "CALLS,USES" -> "CALLS|USES")
+	relPattern := ""
+	if relationship != "" {
+		relPattern = ":" + strings.ReplaceAll(relationship, ",", "|")
+	}
+
+	// 2. Determine arrow syntax based on direction
+	arrowStart := "-"
+	arrowEnd := "->"
+	switch direction {
+	case Incoming:
+		arrowStart = "<-"
+		arrowEnd = "-"
+	case Both:
+		arrowStart = "-"
+		arrowEnd = "-"
+	}
+
+	// 3. Construct Cypher query
+	query := fmt.Sprintf(`
+		MATCH (n) WHERE n.id = $id OR n.name = $id
+		MATCH p = (n)%s[%s*1..%d]%s(m)
+		RETURN p
+	`, arrowStart, relPattern, depth, arrowEnd)
+
+	result, err := neo4j.ExecuteQuery(p.ctx, p.driver, query, map[string]any{
+		"id": startNodeID,
+	}, neo4j.EagerResultTransformer)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute Traverse query: %w", err)
+	}
+
+	paths := make([]*graph.Path, 0, len(result.Records))
+	for _, record := range result.Records {
+		rawPath, _, err := neo4j.GetRecordValue[neo4j.Path](record, "p")
+		if err != nil {
+			continue
+		}
+
+		// Convert neo4j.Path to graph.Path
+		gPath := &graph.Path{
+			Nodes: make([]*graph.Node, len(rawPath.Nodes)),
+			Edges: make([]*graph.Edge, len(rawPath.Relationships)),
+		}
+
+		for i, n := range rawPath.Nodes {
+			label := ""
+			if len(n.Labels) > 0 {
+				label = n.Labels[0]
+			}
+
+			id := ""
+			if idVal, ok := n.Props["id"].(string); ok {
+				id = idVal
+			} else if nameVal, ok := n.Props["name"].(string); ok {
+				id = nameVal
+			}
+
+			gPath.Nodes[i] = &graph.Node{
+				ID:         id,
+				Label:      label,
+				Properties: n.Props,
+			}
+		}
+
+		for i, r := range rawPath.Relationships {
+			var sourceID, targetID string
+			for _, n := range rawPath.Nodes {
+				if n.ElementId == r.StartElementId {
+					if idVal, ok := n.Props["id"].(string); ok {
+						sourceID = idVal
+					} else if nameVal, ok := n.Props["name"].(string); ok {
+						sourceID = nameVal
+					}
+				}
+				if n.ElementId == r.EndElementId {
+					if idVal, ok := n.Props["id"].(string); ok {
+						targetID = idVal
+					} else if nameVal, ok := n.Props["name"].(string); ok {
+						targetID = nameVal
+					}
+				}
+			}
+
+			gPath.Edges[i] = &graph.Edge{
+				SourceID: sourceID,
+				TargetID: targetID,
+				Type:     r.Type,
+			}
+		}
+
+		paths = append(paths, gPath)
+	}
+
+	return paths, nil
 }
 
 // SearchSimilarFunctions searches for function nodes using vector embeddings.
