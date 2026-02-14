@@ -34,7 +34,7 @@ for target in "${TARGETS[@]}"; do
     
     output_name="dist/graphdb-${goos}-${goarch}"
     if [ "$goos" == "windows" ]; then
-        output_name="dist/graphdb-win.exe"
+        output_name=".gemini/skills/graphdb/scripts/graphdb-win.exe"
     fi
 
     # Run go build
