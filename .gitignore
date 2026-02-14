@@ -14,6 +14,7 @@ backup_graph_data/
 
 # Temporary Tools and Binaries
 temp_tools/
+.gemini/tools/
 .claude/*
 
 # Go compiled binaries
