@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.408-beta] - 2026-06-04 [Pre-release]
+### Fixed
+- **Enrich:** Fixed a critical validation error (`Required field is not set. field:batch_prediction_job.display_name`) when creating batch prediction jobs by setting the `DisplayName` field in the request config.
+
 ## [1.8.406-beta] - 2026-06-04 [Pre-release]
 ### Added
 - **Build:** Added `--batch`, `--resume`, and `--gcs-bucket` flags to `build-all` to support split-phase asynchronous feature enrichment.
