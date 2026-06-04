@@ -3,6 +3,7 @@ package batch
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"google.golang.org/genai"
 )
@@ -37,7 +38,17 @@ func (c *RealBatchClient) CreateJob(ctx context.Context, model string, gcsInputU
 		Format: "jsonl",
 		GCSURI: []string{gcsInputURI},
 	}
+	displayName := "graphdb-enrich"
+	parts := strings.Split(gcsInputURI, "/")
+	if len(parts) >= 2 {
+		jobID := parts[len(parts)-2]
+		if jobID != "" && jobID != "graphdb-batches" {
+			displayName = fmt.Sprintf("graphdb-enrich-%s", jobID)
+		}
+	}
+
 	config := &genai.CreateBatchJobConfig{
+		DisplayName: displayName,
 		Dest: &genai.BatchJobDestination{
 			Format: "jsonl",
 			GCSURI: gcsOutputURI,
