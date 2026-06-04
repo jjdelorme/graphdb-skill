@@ -34,3 +34,11 @@ test/output/
 # Environment Variables
 .env
 *.jsonl
+
+# Agent Workspaces and Scratch Files
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
+

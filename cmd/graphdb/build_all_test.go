@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"graphdb/internal/config"
 	"graphdb/internal/query"
 	"os"
@@ -259,6 +260,72 @@ func TestHandleBuildAll_ResumeMode(t *testing.T) {
 	}
 	if !enrichTestsCalled {
 		t.Error("Expected enrichTestsCmd to be called upon resume completion")
+	}
+}
+
+func TestHandleBuildAll_CleanMode(t *testing.T) {
+	t.Setenv("GRAPHDB_MOCK_ENABLED", "true")
+
+	var ingestCalledWith []string
+	var enrichCalled bool
+	var importCalled bool
+	var wipeCalled bool
+
+	originalIngest := ingestCmd
+	originalEnrich := enrichCmd
+	originalImport := importCmd
+	originalEnrichHistory := enrichHistoryCmd
+	originalEnrichContamination := enrichContaminationCmd
+	originalEnrichTests := enrichTestsCmd
+	originalSetupProvider := setupProviderFn
+
+	defer func() {
+		ingestCmd = originalIngest
+		enrichCmd = originalEnrich
+		importCmd = originalImport
+		enrichHistoryCmd = originalEnrichHistory
+		enrichContaminationCmd = originalEnrichContamination
+		enrichTestsCmd = originalEnrichTests
+		setupProviderFn = originalSetupProvider
+	}()
+
+	ingestCmd = func(args []string) { ingestCalledWith = args }
+	enrichCmd = func(args []string) { enrichCalled = true }
+	importCmd = func(args []string) { importCalled = true }
+	enrichHistoryCmd = func(args []string) {}
+	enrichContaminationCmd = func(args []string) {}
+	enrichTestsCmd = func(args []string) {}
+
+	mockProvider := &MockProvider{
+		WipeDatabaseFn: func(ctx context.Context) error {
+			wipeCalled = true
+			return nil
+		},
+	}
+	setupProviderFn = func(cfg config.Config) (query.GraphProvider, error) {
+		return mockProvider, nil
+	}
+
+	args := []string{"-dir", "test_project", "--clean"}
+	handleBuildAll(args)
+
+	if !wipeCalled {
+		t.Error("Expected WipeDatabase to be called on provider in clean mode")
+	}
+
+	// Verify it forces a non-incremental build:
+	// Ingest must be called with full flags, including -nodes and -edges.
+	expectedIngest := []string{"-dir", "test_project", "-nodes", "nodes.jsonl", "-edges", "edges.jsonl"}
+	if !reflect.DeepEqual(ingestCalledWith, expectedIngest) {
+		t.Errorf("Expected full ingest args %v, got %v", expectedIngest, ingestCalledWith)
+	}
+
+	if !importCalled {
+		t.Error("Expected import to run in clean mode (non-incremental)")
+	}
+
+	if !enrichCalled {
+		t.Error("Expected enrich to run in clean mode")
 	}
 }
 

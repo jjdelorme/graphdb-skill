@@ -1126,3 +1126,31 @@ func sanitizeProperties(props map[string]any) map[string]any {
 	}
 	return clean
 }
+
+// WipeDatabase clears all data from the database using a batched transaction delete
+// and falling back to a non-transactional delete if the batch query fails.
+func (p *Neo4jProvider) WipeDatabase(ctx context.Context) error {
+	session := p.driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite, DatabaseName: p.dbName})
+	defer session.Close(ctx)
+
+	// 1. Try transactional batch delete first (requires auto-commit transaction session.Run)
+	queryBatch := `CALL { MATCH (n) DETACH DELETE n } IN TRANSACTIONS OF 10000 ROWS`
+	result, err := session.Run(ctx, queryBatch, nil)
+	if err == nil {
+		if _, err = result.Consume(ctx); err == nil {
+			return nil
+		}
+	}
+
+	// 2. Fallback to basic DETACH DELETE if transactional delete fails/unsupported
+	logger.Query.Printf("Warning: batch transactional wipe failed: %v. Falling back to non-transactional wipe.", err)
+	resultFallback, err := session.Run(ctx, `MATCH (n) DETACH DELETE n`, nil)
+	if err != nil {
+		return fmt.Errorf("failed to wipe database: %w", err)
+	}
+	_, err = resultFallback.Consume(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to consume fallback wipe query: %w", err)
+	}
+	return nil
+}

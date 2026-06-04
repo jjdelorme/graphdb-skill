@@ -577,4 +577,31 @@ func TestLocateUsage_SchemaMismatch(t *testing.T) {
 	if len(resultFull.Dependencies) != 3 {
 	        t.Errorf("Expected 3 dependencies, got %d", len(resultFull.Dependencies))
 	}
+}
+
+func TestWipeDatabase(t *testing.T) {
+	p := getProvider(t)
+	defer p.Close()
+
+	// 1. Create a dummy node to verify delete works
+	_, err := neo4j.ExecuteQuery(p.ctx, p.driver, "CREATE (n:TestNode {name: 'temp_to_wipe'})", nil, neo4j.EagerResultTransformer)
+	if err != nil {
+		t.Fatalf("Failed to create test node: %v", err)
 	}
+
+	// 2. Call WipeDatabase
+	if err := p.WipeDatabase(p.ctx); err != nil {
+		t.Fatalf("WipeDatabase failed: %v", err)
+	}
+
+	// 3. Query count to confirm it is 0
+	res, err := neo4j.ExecuteQuery(p.ctx, p.driver, "MATCH (n) RETURN count(n) as count", nil, neo4j.EagerResultTransformer)
+	if err != nil {
+		t.Fatalf("Failed to verify database count: %v", err)
+	}
+
+	count := res.Records[0].Values[0].(int64)
+	if count != 0 {
+		t.Errorf("Expected 0 nodes after WipeDatabase, got %d", count)
+	}
+}

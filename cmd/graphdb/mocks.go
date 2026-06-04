@@ -30,11 +30,19 @@ func (s *MockSummarizer) Summarize(snippets []string, level string, extraContext
 // MockProvider for testing/dry-run
 type MockProvider struct {
 	GetSemanticSeamsCalled bool
+	WipeDatabaseFn         func(ctx context.Context) error
 	BatchJobCount          int
 	ActiveBatchJobs        []query.BatchJob
 }
 
 func (m *MockProvider) Close() error { return nil }
+func (m *MockProvider) WipeDatabase(ctx context.Context) error {
+	if m.WipeDatabaseFn != nil {
+		return m.WipeDatabaseFn(ctx)
+	}
+	return nil
+}
+
 func (m *MockProvider) Traverse(startNodeID string, relationship string, direction query.Direction, depth int) ([]*graph.Path, error) {
 	return nil, nil
 }
@@ -126,6 +134,8 @@ func (m *MockLoader) ApplyConstraints(ctx context.Context) error                
 func (m *MockLoader) UpdateGraphState(ctx context.Context, commit string, dir string) error {
 	return nil
 }
+func (m *MockLoader) WipeDatabase(ctx context.Context) error { return nil }
+
 
 func (m *MockProvider) CreateBatchJobNode(ctx context.Context, jobID, modelName, gcsInput, gcsOutput string) error {
 	return nil

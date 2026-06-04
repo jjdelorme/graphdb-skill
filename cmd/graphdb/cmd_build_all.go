@@ -22,11 +22,16 @@ func handleBuildAll(args []string) {
 	batchPtr := fs.Bool("batch", false, "Submit feature enrichment to Vertex AI Batch API")
 	resumePtr := fs.Bool("resume", false, "Resume paused build-all by checking/importing batch features and running remaining phases")
 	gcsBucketPtr := fs.String("gcs-bucket", "", "Optional: GCS bucket name for batch API")
+	cleanPtr := fs.Bool("clean", false, "Wipe the Neo4j database before building (disables incremental mode)")
 	fs.Parse(args)
 
 	// Mutual exclusivity check
 	if *batchPtr && *resumePtr {
 		fmt.Fprintln(os.Stderr, "Error: cannot specify both --batch and --resume")
+		os.Exit(1)
+	}
+	if *cleanPtr && *resumePtr {
+		fmt.Fprintln(os.Stderr, "Error: cannot specify both --clean and --resume")
 		os.Exit(1)
 	}
 
@@ -99,7 +104,19 @@ func handleBuildAll(args []string) {
 
 	isIncremental := false
 	stateCommit := ""
-	if cfg.Neo4jURI != "" {
+	if *cleanPtr {
+		fmt.Println("🧹 Clean build requested. Wiping database...")
+		provider, err := setupProviderFn(cfg)
+		if err != nil {
+			log.Fatalf("Failed to connect to database for wipe: %v", err)
+		}
+		ctx := context.Background()
+		if err := provider.WipeDatabase(ctx); err != nil {
+			log.Fatalf("Failed to wipe database: %v", err)
+		}
+		provider.Close()
+		fmt.Println("🧹 Database wiped successfully.")
+	} else if cfg.Neo4jURI != "" {
 		provider, err := setupProviderFn(cfg)
 		if err == nil {
 			stateCommit, _ = provider.GetGraphState()

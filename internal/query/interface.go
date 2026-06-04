@@ -187,4 +187,7 @@ type GraphProvider interface {
 	UpdateBatchJobNodeStatus(ctx context.Context, jobID, state, failureReason string) error
 	GetActiveBatchJobs(ctx context.Context) ([]BatchJob, error)
 	GetBatchJobCount(ctx context.Context) (int, error)
+
+	// Wipe database operations
+	WipeDatabase(ctx context.Context) error
 }

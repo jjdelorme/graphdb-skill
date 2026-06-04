@@ -24,9 +24,17 @@ type MockGraphProvider struct {
 	UpdateFeatureSummaryFn    func(id string, name string, description string) error
 	GetFunctionMetadataFn     func() ([]*graph.Node, error)
 	ExploreDomainFn           func(featureID string) (*query.DomainExplorationResult, error)
+	WipeDatabaseFn            func(ctx context.Context) error
 }
 
 func (m *MockGraphProvider) Close() error { return nil }
+func (m *MockGraphProvider) WipeDatabase(ctx context.Context) error {
+	if m.WipeDatabaseFn != nil {
+		return m.WipeDatabaseFn(ctx)
+	}
+	return nil
+}
+
 func (m *MockGraphProvider) Traverse(startNodeID string, relationship string, direction query.Direction, depth int) ([]*graph.Path, error) {
 	return nil, nil
 }
