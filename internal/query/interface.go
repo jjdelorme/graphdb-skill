@@ -186,4 +186,5 @@ type GraphProvider interface {
 	CreateBatchJobNode(ctx context.Context, jobID, modelName, gcsInput, gcsOutput string) error
 	UpdateBatchJobNodeStatus(ctx context.Context, jobID, state, failureReason string) error
 	GetActiveBatchJobs(ctx context.Context) ([]BatchJob, error)
+	GetBatchJobCount(ctx context.Context) (int, error)
 }

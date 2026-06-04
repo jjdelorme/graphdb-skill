@@ -180,6 +180,9 @@ func (m *MockGraphProvider) UpdateBatchJobNodeStatus(ctx context.Context, jobID,
 func (m *MockGraphProvider) GetActiveBatchJobs(ctx context.Context) ([]query.BatchJob, error) {
 	return nil, nil
 }
+func (m *MockGraphProvider) GetBatchJobCount(ctx context.Context) (int, error) {
+	return 0, nil
+}
 
 func TestOrchestratorExtraction(t *testing.T) {
 	mockProvider := &MockGraphProvider{}

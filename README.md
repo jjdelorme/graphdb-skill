@@ -131,19 +131,22 @@ For advanced users requiring granular control, each step can be run individually
 
 ### Asynchronous Feature Enrichment (Vertex AI Batch API)
 
-For very large codebases, you can run the feature enrichment phase asynchronously via the Vertex AI Batch API. This uploads the prompts to a Google Cloud Storage (GCS) bucket and processes them in bulk rather than running inline queries.
+For very large codebases, you can run the build sequence using the Vertex AI Batch API to process features asynchronously. This uploads the prompts to a Google Cloud Storage (GCS) bucket and processes them in bulk rather than running inline queries, pausing the build until the batch job succeeds.
 
-1. **Submit Batch Job:**
+1. **Submit Batch Build:**
    ```bash
-   .gemini/skills/graphdb/scripts/graphdb enrich-features --batch --gcs-bucket <your-gcs-bucket>
+   .gemini/skills/graphdb/scripts/graphdb build-all --batch --gcs-bucket <your-gcs-bucket>
    ```
-   *Note: If `--gcs-bucket` is omitted, the CLI will look for the `GEMINI_BATCH_GCS_BUCKET` variable in your `.env`.*
+   *This executes Ingestion and Import phases, submits the feature extraction job to Vertex AI, and pauses the build.*
+   *Note: If `--gcs-bucket` is omitted, the CLI will fall back to the `GEMINI_BATCH_GCS_BUCKET` variable in your `.env`.*
 
-2. **Check Status & Import Results:**
-   Once the job is running asynchronously, you can check its status and automatically import the completed features back into the database by running:
+2. **Resume and Finalize Build:**
+   Once the batch job completes on Google Cloud, resume the build to import features and complete the remaining phases (Git History, Contamination, Test Linkage):
    ```bash
-   .gemini/skills/graphdb/scripts/graphdb enrich-features --check-batch
+   .gemini/skills/graphdb/scripts/graphdb build-all --resume
    ```
+   *If the batch job is still running, this command will report the active status and exit safely. You can run it again later.*
+
 
 
 ## 🔍 Usage & Analysis

@@ -65,9 +65,20 @@ If a command (especially `enrich-features`, `build-all`, or any semantic query) 
 
 ### 1. The "One-Shot" Build (Recommended)
 To build the entire graph from scratch (Ingest -> Import -> All Enrichment Phases), use the `build-all` command. This is the standard entry point for all new projects.
-```bash
-${graphdb_bin} build-all
-```
+
+*   **Synchronous Mode:**
+    ```bash
+    ${graphdb_bin} build-all
+    ```
+*   **Asynchronous Batch Mode:** Best for large codebases. Submits prompts to Vertex AI Batch API, staging inputs in GCS.
+    1. Submit structural build and batch enrichment:
+       ```bash
+       ${graphdb_bin} build-all --batch --gcs-bucket <your-gcs-bucket-name>
+       ```
+    2. Resume and finalize remaining phases once batch completes:
+       ```bash
+       ${graphdb_bin} build-all --resume
+       ```
 
 ### 2. Status & Incremental Ingestion
 Before rebuilding, check if the graph is already in sync with your local code:

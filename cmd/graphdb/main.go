@@ -18,6 +18,7 @@ var (
 	enrichHistoryCmd       = handleEnrichHistory
 	enrichContaminationCmd = handleEnrichContamination
 	enrichTestsCmd         = handleEnrichTests
+	setupProviderFn        = setupProvider
 )
 
 func main() {

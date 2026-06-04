@@ -564,6 +564,23 @@ func (p *Neo4jProvider) GetActiveBatchJobs(ctx context.Context) ([]BatchJob, err
 	return jobs, nil
 }
 
+// GetBatchJobCount returns the total number of BatchJobs (active or completed/failed).
+func (p *Neo4jProvider) GetBatchJobCount(ctx context.Context) (int, error) {
+	query := `
+		MATCH (j:BatchJob)
+		RETURN count(j) as count
+	`
+	result, err := neo4j.ExecuteQuery(ctx, p.driver, query, nil, neo4j.EagerResultTransformer)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count batch jobs: %w", err)
+	}
+	if len(result.Records) == 0 {
+		return 0, nil
+	}
+	count, _, _ := neo4j.GetRecordValue[int64](result.Records[0], "count")
+	return int(count), nil
+}
+
 func parseBatchJobTime(val any) (time.Time, error) {
 	if val == nil {
 		return time.Time{}, nil

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"graphdb/internal/config"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,14 +15,20 @@ import (
 )
 
 func handleBuildAll(args []string) {
-	fmt.Println("🚀 Starting GraphDB Build-All Sequence...")
-	fmt.Println("========================================")
-
 	fs := flag.NewFlagSet("build-all", flag.ExitOnError)
 	dirPtr := fs.String("dir", "", "Directory to process")
 	nodesPtr := fs.String("nodes", "nodes.jsonl", "Intermediate output file for nodes")
 	edgesPtr := fs.String("edges", "edges.jsonl", "Intermediate output file for edges")
+	batchPtr := fs.Bool("batch", false, "Submit feature enrichment to Vertex AI Batch API")
+	resumePtr := fs.Bool("resume", false, "Resume paused build-all by checking/importing batch features and running remaining phases")
+	gcsBucketPtr := fs.String("gcs-bucket", "", "Optional: GCS bucket name for batch API")
 	fs.Parse(args)
+
+	// Mutual exclusivity check
+	if *batchPtr && *resumePtr {
+		fmt.Fprintln(os.Stderr, "Error: cannot specify both --batch and --resume")
+		os.Exit(1)
+	}
 
 	cfg := config.LoadConfig()
 	if *dirPtr != "" {
@@ -29,10 +36,71 @@ func handleBuildAll(args []string) {
 	}
 	*dirPtr = cfg.BaseDir
 
+	if *resumePtr {
+		fmt.Println("🔄 Resuming paused Build-All sequence...")
+		fmt.Println("========================================")
+
+		provider, err := setupProviderFn(cfg)
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+		defer provider.Close()
+
+		ctx := context.Background()
+
+		// Verify that batch jobs exist
+		totalJobs, err := provider.GetBatchJobCount(ctx)
+		if err != nil {
+			log.Fatalf("Failed to check batch job count: %v", err)
+		}
+		if totalJobs == 0 {
+			fmt.Fprintln(os.Stderr, "Error: No batch jobs found in the database. Did you run 'build-all --batch' first?")
+			os.Exit(1)
+		}
+
+		// Run check-batch to pull results and update states
+		fmt.Println("Checking status of active batch jobs and importing features...")
+		checkArgs := []string{"--check-batch"}
+		enrichCmd(checkArgs)
+
+		// Check if any jobs remain active
+		activeJobs, err := provider.GetActiveBatchJobs(ctx)
+		if err != nil {
+			log.Fatalf("Failed to query active batch jobs: %v", err)
+		}
+		if len(activeJobs) > 0 {
+			fmt.Printf("\n⏳ Some batch jobs are still in progress (%d active). Please run 'build-all --resume' again later.\n", len(activeJobs))
+			return
+		}
+
+		fmt.Println("\n✅ Feature enrichment is complete. Resuming remaining build phases...")
+
+		// 4. Enrich History
+		fmt.Println("\n[Phase 4/6] Enriching Git History...")
+		historyArgs := []string{"-dir", *dirPtr}
+		enrichHistoryCmd(historyArgs)
+
+		// 5. Enrich Contamination
+		fmt.Println("\n[Phase 5/6] Enriching Contamination/Risk...")
+		contaminationArgs := []string{}
+		enrichContaminationCmd(contaminationArgs)
+
+		// 6. Enrich Tests
+		fmt.Println("\n[Phase 6/6] Linking Tests...")
+		testArgs := []string{}
+		enrichTestsCmd(testArgs)
+
+		fmt.Println("\n✅ Build-All Sequence Complete!")
+		return
+	}
+
+	fmt.Println("🚀 Starting GraphDB Build-All Sequence...")
+	fmt.Println("========================================")
+
 	isIncremental := false
 	stateCommit := ""
 	if cfg.Neo4jURI != "" {
-		provider, err := setupProvider(cfg)
+		provider, err := setupProviderFn(cfg)
 		if err == nil {
 			stateCommit, _ = provider.GetGraphState()
 			if stateCommit != "" {
@@ -118,8 +186,19 @@ func handleBuildAll(args []string) {
 
 	// 3. Enrich Features
 	fmt.Println("\n[Phase 3/6] Enriching Features (in-database)...")
-	enrichArgs := []string{"-dir", *dirPtr}
-	enrichCmd(enrichArgs)
+	if *batchPtr {
+		enrichArgs := []string{"-dir", *dirPtr, "--batch"}
+		if *gcsBucketPtr != "" {
+			enrichArgs = append(enrichArgs, "--gcs-bucket", *gcsBucketPtr)
+		}
+		enrichCmd(enrichArgs)
+		fmt.Println("\n⏳ Build-All paused after submitting batch enrichment.")
+		fmt.Println("Please run 'graphdb build-all --resume' once the batch job completes to import features and finalize the build.")
+		return
+	} else {
+		enrichArgs := []string{"-dir", *dirPtr}
+		enrichCmd(enrichArgs)
+	}
 
 	// 4. Enrich History
 	fmt.Println("\n[Phase 4/6] Enriching Git History...")

@@ -1,6 +1,10 @@
+//go:build test_mocks
+
 package main
 
 import (
+	"graphdb/internal/config"
+	"graphdb/internal/query"
 	"os"
 	"reflect"
 	"testing"
@@ -152,3 +156,109 @@ func TestHandleBuildAll_CleansUpIntermediateFiles(t *testing.T) {
 		t.Errorf("Expected %s to be deleted, but it still exists", edgesFile)
 	}
 }
+
+func TestHandleBuildAll_BatchMode(t *testing.T) {
+	t.Setenv("GRAPHDB_MOCK_ENABLED", "true")
+
+	var ingestCalled bool
+	var enrichCalledWith []string
+	var enrichHistoryCalled bool
+	var enrichContaminationCalled bool
+	var enrichTestsCalled bool
+
+	originalIngest := ingestCmd
+	originalEnrich := enrichCmd
+	originalImport := importCmd
+	originalEnrichHistory := enrichHistoryCmd
+	originalEnrichContamination := enrichContaminationCmd
+	originalEnrichTests := enrichTestsCmd
+
+	defer func() {
+		ingestCmd = originalIngest
+		enrichCmd = originalEnrich
+		importCmd = originalImport
+		enrichHistoryCmd = originalEnrichHistory
+		enrichContaminationCmd = originalEnrichContamination
+		enrichTestsCmd = originalEnrichTests
+	}()
+
+	ingestCmd = func(args []string) { ingestCalled = true }
+	enrichCmd = func(args []string) { enrichCalledWith = args }
+	importCmd = func(args []string) { }
+	enrichHistoryCmd = func(args []string) { enrichHistoryCalled = true }
+	enrichContaminationCmd = func(args []string) { enrichContaminationCalled = true }
+	enrichTestsCmd = func(args []string) { enrichTestsCalled = true }
+
+	args := []string{"-dir", "test_project", "--batch", "--gcs-bucket", "test-bucket"}
+	handleBuildAll(args)
+
+	if !ingestCalled {
+		t.Error("Expected ingest to be called")
+	}
+
+	expectedEnrich := []string{"-dir", "test_project", "--batch", "--gcs-bucket", "test-bucket"}
+	if !reflect.DeepEqual(enrichCalledWith, expectedEnrich) {
+		t.Errorf("Enrich args mismatch.\nGot: %v\nWant: %v", enrichCalledWith, expectedEnrich)
+	}
+
+	if enrichHistoryCalled || enrichContaminationCalled || enrichTestsCalled {
+		t.Error("Expected remaining phases to NOT be called in batch mode")
+	}
+}
+
+func TestHandleBuildAll_ResumeMode(t *testing.T) {
+	t.Setenv("GRAPHDB_MOCK_ENABLED", "true")
+
+	var checkBatchCalledWith []string
+	var enrichHistoryCalled bool
+	var enrichContaminationCalled bool
+	var enrichTestsCalled bool
+
+	originalEnrich := enrichCmd
+	originalEnrichHistory := enrichHistoryCmd
+	originalEnrichContamination := enrichContaminationCmd
+	originalEnrichTests := enrichTestsCmd
+	originalSetupProvider := setupProviderFn
+
+	defer func() {
+		enrichCmd = originalEnrich
+		enrichHistoryCmd = originalEnrichHistory
+		enrichContaminationCmd = originalEnrichContamination
+		enrichTestsCmd = originalEnrichTests
+		setupProviderFn = originalSetupProvider
+	}()
+
+	enrichCmd = func(args []string) { checkBatchCalledWith = args }
+	enrichHistoryCmd = func(args []string) { enrichHistoryCalled = true }
+	enrichContaminationCmd = func(args []string) { enrichContaminationCalled = true }
+	enrichTestsCmd = func(args []string) { enrichTestsCalled = true }
+
+	// Mock provider that has 1 completed batch job and 0 active ones
+	mockProvider := &MockProvider{
+		BatchJobCount:   1,
+		ActiveBatchJobs: nil,
+	}
+	setupProviderFn = func(cfg config.Config) (query.GraphProvider, error) {
+		return mockProvider, nil
+	}
+
+	args := []string{"-dir", "test_project", "--resume"}
+	handleBuildAll(args)
+
+	expectedCheckBatch := []string{"--check-batch"}
+	if !reflect.DeepEqual(checkBatchCalledWith, expectedCheckBatch) {
+		t.Errorf("Check-batch args mismatch.\nGot: %v\nWant: %v", checkBatchCalledWith, expectedCheckBatch)
+	}
+
+	// Verify remaining phases WERE called (as active batch jobs is 0)
+	if !enrichHistoryCalled {
+		t.Error("Expected enrichHistoryCmd to be called upon resume completion")
+	}
+	if !enrichContaminationCalled {
+		t.Error("Expected enrichContaminationCmd to be called upon resume completion")
+	}
+	if !enrichTestsCalled {
+		t.Error("Expected enrichTestsCmd to be called upon resume completion")
+	}
+}
+

@@ -30,6 +30,8 @@ func (s *MockSummarizer) Summarize(snippets []string, level string, extraContext
 // MockProvider for testing/dry-run
 type MockProvider struct {
 	GetSemanticSeamsCalled bool
+	BatchJobCount          int
+	ActiveBatchJobs        []query.BatchJob
 }
 
 func (m *MockProvider) Close() error { return nil }
@@ -134,6 +136,10 @@ func (m *MockProvider) UpdateBatchJobNodeStatus(ctx context.Context, jobID, stat
 }
 
 func (m *MockProvider) GetActiveBatchJobs(ctx context.Context) ([]query.BatchJob, error) {
-	return nil, nil
+	return m.ActiveBatchJobs, nil
+}
+
+func (m *MockProvider) GetBatchJobCount(ctx context.Context) (int, error) {
+	return m.BatchJobCount, nil
 }
 
