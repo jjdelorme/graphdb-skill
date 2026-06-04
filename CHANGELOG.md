@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.403-beta] - 2026-06-04 [Pre-release]
+### Added
+- **Enrich:** Added support for the Vertex AI Gemini Batch API during feature enrichment, enabling bulk processing of feature metadata via GCS and JSONL.
+- **Config:** Added support for Gemini Batch API and GCS storage bucket configurations.
+- **Tests:** Added comprehensive E2E, edge case, and adversarial tests for Batch API enrichment.
+
 ## [1.8.0] - 2026-05-18
 ### Added
 - **Config:** Added `GRAPHDB_DIR` environment variable support to set a persistent base directory for all commands.
