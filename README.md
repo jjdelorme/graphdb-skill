@@ -69,6 +69,7 @@ GEMINI_GENERATIVE_MODEL=gemini-3.1-flash-lite
 GRAPHDB_LOG=graphdb.log # Enable logging to this file
 GRAPHDB_DIR=. # Optional: Base directory for source files and state lookup
 LLM_CONCURRENCY=5 # Optional: Number of concurrent LLM requests during RPG enrichment
+GEMINI_BATCH_GCS_BUCKET=your-gcs-bucket-name # Optional: Default GCS bucket for Vertex AI Batch jobs
 ```
 
 ### Custom LLM Backends (Experimental)
@@ -127,6 +128,23 @@ This command sequentially executes the full pipeline:
 4.  **Modernize:** Calculates architectural risk and test linkages.
 
 For advanced users requiring granular control, each step can be run individually. Refer to the [Skill Documentation](.gemini/skills/graphdb/SKILL.md) for manual pipeline details.
+
+### Asynchronous Feature Enrichment (Vertex AI Batch API)
+
+For very large codebases, you can run the feature enrichment phase asynchronously via the Vertex AI Batch API. This uploads the prompts to a Google Cloud Storage (GCS) bucket and processes them in bulk rather than running inline queries.
+
+1. **Submit Batch Job:**
+   ```bash
+   .gemini/skills/graphdb/scripts/graphdb enrich-features --batch --gcs-bucket <your-gcs-bucket>
+   ```
+   *Note: If `--gcs-bucket` is omitted, the CLI will look for the `GEMINI_BATCH_GCS_BUCKET` variable in your `.env`.*
+
+2. **Check Status & Import Results:**
+   Once the job is running asynchronously, you can check its status and automatically import the completed features back into the database by running:
+   ```bash
+   .gemini/skills/graphdb/scripts/graphdb enrich-features --check-batch
+   ```
+
 
 ## 🔍 Usage & Analysis
 

@@ -32,6 +32,8 @@ The tool automatically inherits the following environment variables. Assume they
 *   `GOOGLE_CLOUD_PROJECT` (Required for Vertex AI embeddings)
 *   `GOOGLE_CLOUD_LOCATION` (Default: `global`)
 *   `GRAPHDB_DIR` (Optional: Sets the base directory for source files and state management. Equivalent to the `-dir` flag but persistent across all commands.)
+*   `GEMINI_BATCH_GCS_BUCKET` (Optional: Target Google Cloud Storage bucket used for staging inputs and outputs for Vertex AI Batch jobs.)
+
 
 ## Operational Guidelines for Agents
 
@@ -87,9 +89,20 @@ ${graphdb_bin} import -nodes nodes.jsonl -edges edges.jsonl
 ```
 
 **Step 3: Feature Enrichment**
-```bash
-${graphdb_bin} enrich-features
-```
+*   **Synchronous Mode (Default):** Runs inline queries synchronously against the model.
+    ```bash
+    ${graphdb_bin} enrich-features
+    ```
+*   **Asynchronous Batch Mode:** Best for large codebases. Submits prompts to Vertex AI Batch API, staging input/output in GCS.
+    1. **Submit Batch Job:**
+       ```bash
+       ${graphdb_bin} enrich-features --batch --gcs-bucket <your-gcs-bucket-name>
+       ```
+    2. **Check & Import Completed Results:**
+       ```bash
+       ${graphdb_bin} enrich-features --check-batch
+       ```
+
 
 **Step 4: Contamination Analysis**
 ```bash
