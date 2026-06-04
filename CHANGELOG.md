@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.412-beta] - 2026-06-04 [Pre-release]
+### Fixed
+- **CLI:** Removed all hardcoded location defaults (e.g. falling back to `us-central1` or defaulting flags to `global`). The CLI now strictly requires `GOOGLE_CLOUD_LOCATION` to be configured in the environment or `.env` file, raising a hard error and exiting if it is missing.
+
 ## [1.8.410-beta] - 2026-06-04 [Pre-release]
 ### Fixed
 - **Enrich:** Removed the logic that overrides `global` location to `us-central1` for batch jobs, allowing the use of Vertex AI's global batch endpoint (needed for models like `gemini-3.1-flash-lite`).
