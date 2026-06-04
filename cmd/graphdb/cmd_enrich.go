@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -324,11 +323,6 @@ func handleEnrichFeatures(args []string) {
 							continue
 						}
 
-						text := item.Text
-						text = strings.TrimPrefix(text, "```json")
-						text = strings.TrimSuffix(text, "```")
-						text = strings.TrimSpace(text)
-
 						// Attempt to unmarshal as the standard object structure first
 						var batchRes struct {
 							Descriptors []string `json:"descriptors"`
@@ -338,12 +332,13 @@ func handleEnrichFeatures(args []string) {
 						var features []string
 						var isVolatile bool
 
-						if err := json.Unmarshal([]byte(text), &batchRes); err == nil {
+						var err error
+						if err = rpg.ParseLLMJSON(item.Text, &batchRes); err == nil {
 							features = batchRes.Descriptors
 							isVolatile = batchRes.IsVolatile
 						} else {
 							// Fallback to legacy array structure
-							if err2 := json.Unmarshal([]byte(text), &features); err2 != nil {
+							if err2 := rpg.ParseLLMJSON(item.Text, &features); err2 != nil {
 								log.Printf("Warning: failed to unmarshal features for %s: %v (error2: %v)", item.CustomID, err, err2)
 								features = []string{"error_parsing_features"}
 								isVolatile = false
