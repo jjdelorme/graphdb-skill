@@ -16,6 +16,13 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
+func init() {
+	if os.Getenv("GRAPHDB_MOCK_ENABLED") == "true" {
+		log.Println("Mock Mode Initialized: Overriding enrichCmd")
+		enrichCmd = handleMockEnrichFeatures
+	}
+}
+
 func setupEmbedder(cfg config.Config) embedding.Embedder {
 	if os.Getenv("GRAPHDB_MOCK_ENABLED") == "true" {
 		log.Println("Using Mock Embedder (test_mocks build)")

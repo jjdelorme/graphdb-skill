@@ -6,9 +6,11 @@ import (
 	"graphdb/internal/graph"
 	"graphdb/internal/loader"
 	"graphdb/internal/logger"
+	"log"
 	"time"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j/dbtype"
 )
 
 const featureTopologyBatchSize = 500
@@ -458,4 +460,124 @@ func (p *Neo4jProvider) UpdateFeatureSummary(id string, name string, description
 		return fmt.Errorf("failed to update feature summary for %s: %w", id, err)
 	}
 	return nil
+}
+
+// CreateBatchJobNode creates or merges a :BatchJob node in Neo4j.
+func (p *Neo4jProvider) CreateBatchJobNode(ctx context.Context, jobID, modelName, gcsInput, gcsOutput string) error {
+	query := `
+		MERGE (j:BatchJob {jobID: $jobID})
+		SET j.modelName = $modelName,
+		    j.gcsInputURI = $gcsInput,
+		    j.gcsOutputURI = $gcsOutput,
+		    j.state = "pending",
+		    j.createdAt = coalesce(j.createdAt, $now),
+		    j.updatedAt = $now
+	`
+	now := time.Now()
+	_, err := neo4j.ExecuteQuery(ctx, p.driver, query, map[string]any{
+		"jobID":     jobID,
+		"modelName": modelName,
+		"gcsInput":  gcsInput,
+		"gcsOutput": gcsOutput,
+		"now":       now,
+	}, neo4j.EagerResultTransformer)
+	if err != nil {
+		return fmt.Errorf("failed to create batch job node %s: %w", jobID, err)
+	}
+	return nil
+}
+
+// UpdateBatchJobNodeStatus updates the status and failure reason of a :BatchJob node.
+func (p *Neo4jProvider) UpdateBatchJobNodeStatus(ctx context.Context, jobID, state, failureReason string) error {
+	query := `
+		MATCH (j:BatchJob {jobID: $jobID})
+		SET j.state = $state,
+		    j.failureReason = $failureReason,
+		    j.updatedAt = $now
+	`
+	now := time.Now()
+	_, err := neo4j.ExecuteQuery(ctx, p.driver, query, map[string]any{
+		"jobID":         jobID,
+		"state":         state,
+		"failureReason": failureReason,
+		"now":           now,
+	}, neo4j.EagerResultTransformer)
+	if err != nil {
+		return fmt.Errorf("failed to update batch job status %s: %w", jobID, err)
+	}
+	return nil
+}
+
+// GetActiveBatchJobs returns all active :BatchJob nodes.
+func (p *Neo4jProvider) GetActiveBatchJobs(ctx context.Context) ([]BatchJob, error) {
+	query := `
+		MATCH (j:BatchJob)
+		WHERE NOT j.state IN ['succeeded', 'failed', 'JOB_STATE_SUCCEEDED', 'JOB_STATE_FAILED', 'JOB_STATE_CANCELLED', 'JOB_STATE_EXPIRED']
+		RETURN j.jobID as jobID,
+		       j.state as state,
+		       j.modelName as modelName,
+		       j.gcsInputURI as gcsInputURI,
+		       j.gcsOutputURI as gcsOutputURI,
+		       j.failureReason as failureReason,
+		       j.createdAt as createdAt,
+		       j.updatedAt as updatedAt
+	`
+	result, err := neo4j.ExecuteQuery(ctx, p.driver, query, nil, neo4j.EagerResultTransformer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active batch jobs: %w", err)
+	}
+
+	jobs := make([]BatchJob, 0, len(result.Records))
+	for _, record := range result.Records {
+		jobID, _, _ := neo4j.GetRecordValue[string](record, "jobID")
+		state, _, _ := neo4j.GetRecordValue[string](record, "state")
+		modelName, _, _ := neo4j.GetRecordValue[string](record, "modelName")
+		gcsInputURI, _, _ := neo4j.GetRecordValue[string](record, "gcsInputURI")
+		gcsOutputURI, _, _ := neo4j.GetRecordValue[string](record, "gcsOutputURI")
+		failureReason, _, _ := neo4j.GetRecordValue[string](record, "failureReason")
+
+		createdAtRaw, _ := record.Get("createdAt")
+		createdAt, err := parseBatchJobTime(createdAtRaw)
+		if err != nil {
+			log.Printf("Warning: failed to parse createdAt for job %s: %v", jobID, err)
+			createdAt = time.Time{}
+		}
+
+		updatedAtRaw, _ := record.Get("updatedAt")
+		updatedAt, err := parseBatchJobTime(updatedAtRaw)
+		if err != nil {
+			log.Printf("Warning: failed to parse updatedAt for job %s: %v", jobID, err)
+			updatedAt = time.Time{}
+		}
+
+		jobs = append(jobs, BatchJob{
+			JobID:         jobID,
+			State:         state,
+			ModelName:     modelName,
+			GCSInputURI:   gcsInputURI,
+			GCSOutputURI:  gcsOutputURI,
+			FailureReason: failureReason,
+			CreatedAt:     createdAt,
+			UpdatedAt:     updatedAt,
+		})
+	}
+	return jobs, nil
+}
+
+func parseBatchJobTime(val any) (time.Time, error) {
+	if val == nil {
+		return time.Time{}, nil
+	}
+	switch t := val.(type) {
+	case time.Time:
+		return t, nil
+	case dbtype.Time:
+		return t.Time(), nil
+	case dbtype.LocalDateTime:
+		return t.Time(), nil
+	case string:
+		return time.Parse(time.RFC3339, t)
+	default:
+		return time.Time{}, fmt.Errorf("unexpected date type: %T", val)
+	}
 }

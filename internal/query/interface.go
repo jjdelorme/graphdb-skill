@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"graphdb/internal/graph"
+	"time"
 )
 
 // Direction represents the direction of a relationship traversal.
@@ -113,6 +114,19 @@ type SemanticSeamResult struct {
 	Similarity float64 `json:"similarity"` // Cosine similarity between A and B
 }
 
+// BatchJob represents a Neo4j BatchJob node tracking background batch operations.
+type BatchJob struct {
+	JobID         string    `json:"job_id"`
+	State         string    `json:"state"`
+	ModelName     string    `json:"model_name"`
+	GCSInputURI   string    `json:"gcs_input_uri"`
+	GCSOutputURI  string    `json:"gcs_output_uri"`
+	FailureReason string    `json:"failure_reason"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+
 // GraphProvider defines the interface for graph database operations.
 type GraphProvider interface {
 	// Lifecycle
@@ -167,4 +181,9 @@ type GraphProvider interface {
 	ClearFeatureTopology() error
 	UpdateFeatureTopology(nodes []*graph.Node, edges []*graph.Edge) error
 	UpdateFeatureSummary(id string, name string, description string) error
+
+	// BatchJob operations
+	CreateBatchJobNode(ctx context.Context, jobID, modelName, gcsInput, gcsOutput string) error
+	UpdateBatchJobNodeStatus(ctx context.Context, jobID, state, failureReason string) error
+	GetActiveBatchJobs(ctx context.Context) ([]BatchJob, error)
 }

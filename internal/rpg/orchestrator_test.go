@@ -171,6 +171,16 @@ func (m *MockGraphProvider) ExploreDomain(featureID string) (*query.DomainExplor
 	return nil, nil
 }
 
+func (m *MockGraphProvider) CreateBatchJobNode(ctx context.Context, jobID, modelName, gcsInput, gcsOutput string) error {
+	return nil
+}
+func (m *MockGraphProvider) UpdateBatchJobNodeStatus(ctx context.Context, jobID, state, failureReason string) error {
+	return nil
+}
+func (m *MockGraphProvider) GetActiveBatchJobs(ctx context.Context) ([]query.BatchJob, error) {
+	return nil, nil
+}
+
 func TestOrchestratorExtraction(t *testing.T) {
 	mockProvider := &MockGraphProvider{}
 	mockProvider.CountUnextractedFunctionsFn = func() (int64, error) { return 1, nil }

@@ -3,10 +3,12 @@
 package query
 
 import (
+	"context"
 	"graphdb/internal/config"
 	"graphdb/internal/graph"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
@@ -327,4 +329,191 @@ func TestGetUnextractedFunctions_HappyPath(t *testing.T) {
 	if !found {
 		t.Errorf("GetUnextractedFunctions failed to find the node.")
 	}
+}
+
+func TestBatchJobTracking(t *testing.T) {
+	p := getProvider(t)
+	defer p.Close()
+
+	ctx := context.Background()
+
+	cleanupJobs := func() {
+		_, _ = neo4j.ExecuteQuery(ctx, p.driver, `
+			MATCH (j:BatchJob) WHERE j.jobID STARTS WITH 'test-job-' DETACH DELETE j
+		`, nil, neo4j.EagerResultTransformer)
+	}
+
+	// Clean up before and after
+	cleanupJobs()
+	defer cleanupJobs()
+
+	// 1. Create two batch jobs
+	job1ID := "test-job-1"
+	job2ID := "test-job-2"
+	modelName := "gemini-embedding-001"
+	gcsInput := "gs://my-bucket/input"
+	gcsOutput := "gs://my-bucket/output"
+
+	t.Run("CreateBatchJobNode", func(t *testing.T) {
+		err := p.CreateBatchJobNode(ctx, job1ID, modelName, gcsInput, gcsOutput)
+		if err != nil {
+			t.Fatalf("CreateBatchJobNode failed for job 1: %v", err)
+		}
+
+		err = p.CreateBatchJobNode(ctx, job2ID, modelName, gcsInput, gcsOutput)
+		if err != nil {
+			t.Fatalf("CreateBatchJobNode failed for job 2: %v", err)
+		}
+
+		// Verify properties directly from Neo4j
+		res, err := neo4j.ExecuteQuery(ctx, p.driver, `
+			MATCH (j:BatchJob {jobID: $jobID})
+			RETURN j.modelName as modelName, j.gcsInputURI as gcsInput, j.gcsOutputURI as gcsOutput, j.state as state, j.createdAt as createdAt
+		`, map[string]any{"jobID": job1ID}, neo4j.EagerResultTransformer)
+		if err != nil {
+			t.Fatalf("Failed to query batch job 1 directly: %v", err)
+		}
+		if len(res.Records) != 1 {
+			t.Fatalf("Expected 1 record, got %d", len(res.Records))
+		}
+
+		mName, _, _ := neo4j.GetRecordValue[string](res.Records[0], "modelName")
+		if mName != modelName {
+			t.Errorf("Expected modelName %q, got %q", modelName, mName)
+		}
+
+		state, _, _ := neo4j.GetRecordValue[string](res.Records[0], "state")
+		if state != "pending" {
+			t.Errorf("Expected state 'pending', got %q", state)
+		}
+
+		inputVal, _, _ := neo4j.GetRecordValue[string](res.Records[0], "gcsInput")
+		if inputVal != gcsInput {
+			t.Errorf("Expected gcsInput %q, got %q", gcsInput, inputVal)
+		}
+
+		outputVal, _, _ := neo4j.GetRecordValue[string](res.Records[0], "gcsOutput")
+		if outputVal != gcsOutput {
+			t.Errorf("Expected gcsOutput %q, got %q", gcsOutput, outputVal)
+		}
+	})
+
+	t.Run("GetActiveBatchJobs - both active", func(t *testing.T) {
+		activeJobs, err := p.GetActiveBatchJobs(ctx)
+		if err != nil {
+			t.Fatalf("GetActiveBatchJobs failed: %v", err)
+		}
+
+		// Filter to only our test jobs
+		var testJobs []BatchJob
+		for _, job := range activeJobs {
+			if len(job.JobID) >= 9 && job.JobID[:9] == "test-job-" {
+				testJobs = append(testJobs, job)
+			}
+		}
+
+		if len(testJobs) != 2 {
+			t.Fatalf("Expected 2 active test jobs, got %d (total active: %d)", len(testJobs), len(activeJobs))
+		}
+
+		// Verify fields are populated correctly
+		var found1, found2 bool
+		for _, job := range testJobs {
+			if job.JobID == job1ID {
+				found1 = true
+			} else if job.JobID == job2ID {
+				found2 = true
+			}
+			if job.ModelName != modelName || job.GCSInputURI != gcsInput || job.GCSOutputURI != gcsOutput {
+				t.Errorf("Invalid job fields parsed: %+v", job)
+			}
+			if job.State != "pending" {
+				t.Errorf("Expected state 'pending', got %q", job.State)
+			}
+			if job.CreatedAt.IsZero() || job.UpdatedAt.IsZero() {
+				t.Errorf("Expected non-zero timestamps, got CreatedAt=%v, UpdatedAt=%v", job.CreatedAt, job.UpdatedAt)
+			}
+		}
+		if !found1 || !found2 {
+			t.Errorf("Expected to find both test jobs, found1=%t, found2=%t", found1, found2)
+		}
+	})
+
+	t.Run("UpdateBatchJobNodeStatus - transition active and terminal", func(t *testing.T) {
+		// Update job 1 to terminal (succeeded)
+		err := p.UpdateBatchJobNodeStatus(ctx, job1ID, "succeeded", "")
+		if err != nil {
+			t.Fatalf("UpdateBatchJobNodeStatus failed: %v", err)
+		}
+
+		// Update job 2 to another active state (running)
+		err = p.UpdateBatchJobNodeStatus(ctx, job2ID, "running", "")
+		if err != nil {
+			t.Fatalf("UpdateBatchJobNodeStatus failed: %v", err)
+		}
+
+		activeJobs, err := p.GetActiveBatchJobs(ctx)
+		if err != nil {
+			t.Fatalf("GetActiveBatchJobs failed: %v", err)
+		}
+
+		var testJobs []BatchJob
+		for _, job := range activeJobs {
+			if len(job.JobID) >= 9 && job.JobID[:9] == "test-job-" {
+				testJobs = append(testJobs, job)
+			}
+		}
+
+		if len(testJobs) != 1 {
+			t.Fatalf("Expected 1 active test job, got %d", len(testJobs))
+		}
+
+		if testJobs[0].JobID != job2ID {
+			t.Errorf("Expected active job to be %q, got %q", job2ID, testJobs[0].JobID)
+		}
+
+		if testJobs[0].State != "running" {
+			t.Errorf("Expected state to be 'running', got %q", testJobs[0].State)
+		}
+	})
+
+	t.Run("UpdateBatchJobNodeStatus - transition to failed with reason", func(t *testing.T) {
+		err := p.UpdateBatchJobNodeStatus(ctx, job2ID, "failed", "out of memory")
+		if err != nil {
+			t.Fatalf("UpdateBatchJobNodeStatus failed: %v", err)
+		}
+
+		activeJobs, err := p.GetActiveBatchJobs(ctx)
+		if err != nil {
+			t.Fatalf("GetActiveBatchJobs failed: %v", err)
+		}
+
+		var testJobs []BatchJob
+		for _, job := range activeJobs {
+			if len(job.JobID) >= 9 && job.JobID[:9] == "test-job-" {
+				testJobs = append(testJobs, job)
+			}
+		}
+
+		if len(testJobs) != 0 {
+			t.Fatalf("Expected 0 active test jobs, got %d", len(testJobs))
+		}
+
+		// Verify failure reason is recorded in database
+		res, err := neo4j.ExecuteQuery(ctx, p.driver, `
+			MATCH (j:BatchJob {jobID: $jobID})
+			RETURN j.failureReason as failureReason, j.state as state
+		`, map[string]any{"jobID": job2ID}, neo4j.EagerResultTransformer)
+		if err != nil {
+			t.Fatalf("Failed to query batch job 2 directly: %v", err)
+		}
+		if len(res.Records) != 1 {
+			t.Fatalf("Expected 1 record, got %d", len(res.Records))
+		}
+
+		reason, _, _ := neo4j.GetRecordValue[string](res.Records[0], "failureReason")
+		if reason != "out of memory" {
+			t.Errorf("Expected failureReason 'out of memory', got %q", reason)
+		}
+	})
 }

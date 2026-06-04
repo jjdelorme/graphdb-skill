@@ -124,3 +124,16 @@ func (m *MockLoader) ApplyConstraints(ctx context.Context) error                
 func (m *MockLoader) UpdateGraphState(ctx context.Context, commit string, dir string) error {
 	return nil
 }
+
+func (m *MockProvider) CreateBatchJobNode(ctx context.Context, jobID, modelName, gcsInput, gcsOutput string) error {
+	return nil
+}
+
+func (m *MockProvider) UpdateBatchJobNodeStatus(ctx context.Context, jobID, state, failureReason string) error {
+	return nil
+}
+
+func (m *MockProvider) GetActiveBatchJobs(ctx context.Context) ([]query.BatchJob, error) {
+	return nil, nil
+}
+
