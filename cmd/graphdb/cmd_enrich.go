@@ -324,22 +324,37 @@ func handleEnrichFeatures(args []string) {
 							continue
 						}
 
-						var features []string
 						text := item.Text
 						text = strings.TrimPrefix(text, "```json")
 						text = strings.TrimSuffix(text, "```")
 						text = strings.TrimSpace(text)
 
-						if err := json.Unmarshal([]byte(text), &features); err != nil {
-							log.Printf("Warning: failed to unmarshal features for %s: %v", item.CustomID, err)
-							features = []string{"error_parsing_features"}
+						// Attempt to unmarshal as the standard object structure first
+						var batchRes struct {
+							Descriptors []string `json:"descriptors"`
+							IsVolatile  bool     `json:"is_volatile"`
+						}
+
+						var features []string
+						var isVolatile bool
+
+						if err := json.Unmarshal([]byte(text), &batchRes); err == nil {
+							features = batchRes.Descriptors
+							isVolatile = batchRes.IsVolatile
+						} else {
+							// Fallback to legacy array structure
+							if err2 := json.Unmarshal([]byte(text), &features); err2 != nil {
+								log.Printf("Warning: failed to unmarshal features for %s: %v (error2: %v)", item.CustomID, err, err2)
+								features = []string{"error_parsing_features"}
+								isVolatile = false
+							}
 						}
 
 						if len(features) == 0 {
 							features = []string{"no_features_detected"}
 						}
 
-						if err := provider.UpdateAtomicFeatures(item.CustomID, features, false); err != nil {
+						if err := provider.UpdateAtomicFeatures(item.CustomID, features, isVolatile); err != nil {
 							log.Printf("Warning: failed to update features for %s: %v", item.CustomID, err)
 						}
 					}
