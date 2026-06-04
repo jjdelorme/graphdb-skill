@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.418-beta] - 2026-06-04 [Pre-release]
+### Fixed
+- **Enrich:** Fixed a critical bug in batch prediction response parsing where `is_volatile` flags were hardcoded to `false` and descriptors failed to unmarshal due to expecting a legacy array format. The parser now correctly processes both the standard object schema (containing `descriptors` and `is_volatile`) and legacy arrays.
+
 ## [1.8.416-beta] - 2026-06-04 [Pre-release]
 ### Added
 - **Build:** Added a `--clean` flag to the `build-all` command. When set, this flag overrides the incremental check, wipes all existing nodes and relationships from the database, and forces a full clean-slate rebuild.
