@@ -165,6 +165,7 @@ type GraphProvider interface {
 	PropagateVolatility() error
 	CalculateRiskScores() error
 	CountVolatileFunctions() (int64, error)
+	HasVolatilityData() (bool, error)
 	UpdateFileHistory(metrics map[string]FileHistoryMetrics) error
 
 	// Batch/Streaming Operations

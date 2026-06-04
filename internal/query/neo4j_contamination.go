@@ -85,6 +85,19 @@ func (p *Neo4jProvider) CountVolatileFunctions() (int64, error) {
 	return count, nil
 }
 
+// HasVolatilityData returns true if at least one Function node has a non-null is_volatile property.
+func (p *Neo4jProvider) HasVolatilityData() (bool, error) {
+	query := `
+		// Check if any is_volatile flags exist
+		MATCH (f:Function) WHERE f.is_volatile IS NOT NULL RETURN true as exists LIMIT 1
+	`
+	res, err := p.executeQuery(query, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to check volatility data presence: %w", err)
+	}
+	return len(res.Records) > 0, nil
+}
+
 // PropagateVolatility walks the CALLS graph UPWARD to propagate volatility.
 // MATCH (caller)-[:CALLS]->(callee {is_volatile: true}) SET caller.is_volatile = true
 func (p *Neo4jProvider) PropagateVolatility() error {

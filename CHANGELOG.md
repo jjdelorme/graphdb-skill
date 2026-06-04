@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.421-beta] - 2026-06-04 [Pre-release]
+### Fixed
+- **Enrich:** Refactored the batch result parser to use the robust `ParseLLMJSON` helper, ensuring that markdown containers, newlines, and additional whitespace returned by the Gemini Batch API models are correctly stripped and do not cause JSON unmarshalling failures.
+- **Enrich:** Fixed a bug in `enrich-contamination` where clean builds without volatile functions would fail with a false-positive "Volatility data is missing" error. Introduced `HasVolatilityData()` to check for the presence of volatility flags rather than a non-zero count of volatile functions.
+- **Query:** Removed unused `time` import from `neo4j_batch_test.go` to fix integration test compilation.
+
 ## [1.8.418-beta] - 2026-06-04 [Pre-release]
 ### Fixed
 - **Enrich:** Fixed a critical bug in batch prediction response parsing where `is_volatile` flags were hardcoded to `false` and descriptors failed to unmarshal due to expecting a legacy array format. The parser now correctly processes both the standard object schema (containing `descriptors` and `is_volatile`) and legacy arrays.

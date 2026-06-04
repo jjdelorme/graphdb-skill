@@ -23,12 +23,12 @@ func handleEnrichContamination(args []string) {
 	defer provider.Close()
 
 	// Guard: Check if is_volatile flags exist
-	count, err := provider.CountVolatileFunctions()
+	hasData, err := provider.HasVolatilityData()
 	if err != nil {
-		log.Fatalf("Failed to check volatility data: %v", err)
+		log.Fatalf("Failed to check volatility data presence: %v", err)
 	}
-	if count == 0 {
-		log.Fatal("Volatility data is missing. Run 'graphdb enrich --step extract' first to seed volatility via LLM.")
+	if !hasData {
+		log.Fatal("Volatility data is missing. Run 'graphdb enrich-features' first to seed volatility via LLM.")
 	}
 
 	log.Printf("Propagating volatility UPWARD through the CALLS graph...")

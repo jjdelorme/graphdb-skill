@@ -89,6 +89,7 @@ func (m *MockGraphProvider) SeedVolatility(modulePattern string, rules []query.C
 func (m *MockGraphProvider) PropagateVolatility() error { return nil }
 func (m *MockGraphProvider) CalculateRiskScores() error { return nil }
 func (m *MockGraphProvider) CountVolatileFunctions() (int64, error) { return 0, nil }
+func (m *MockGraphProvider) HasVolatilityData() (bool, error)       { return true, nil }
 func (m *MockGraphProvider) UpdateFileHistory(metrics map[string]query.FileHistoryMetrics) error {
 	return nil
 }

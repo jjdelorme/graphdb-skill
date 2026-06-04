@@ -103,6 +103,7 @@ func (m *MockProvider) SeedVolatility(modulePattern string, rules []query.Contam
 func (m *MockProvider) PropagateVolatility() error { return nil }
 func (m *MockProvider) CalculateRiskScores() error { return nil }
 func (m *MockProvider) CountVolatileFunctions() (int64, error) { return 0, nil }
+func (m *MockProvider) HasVolatilityData() (bool, error)       { return true, nil }
 func (m *MockProvider) UpdateFileHistory(metrics map[string]query.FileHistoryMetrics) error {
 	return nil
 }

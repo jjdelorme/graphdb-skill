@@ -110,3 +110,47 @@ func TestPropagateVolatility(t *testing.T) {
 		t.Errorf("Expected caller to be volatile after upward propagation")
 	}
 }
+
+func TestHasVolatilityData(t *testing.T) {
+	p := getProvider(t)
+	defer p.Close()
+	cleanup(t, p)
+	defer cleanup(t, p)
+
+	// Initially, should be false
+	hasData, err := p.HasVolatilityData()
+	if err != nil {
+		t.Fatalf("HasVolatilityData failed initially: %v", err)
+	}
+	if hasData {
+		t.Errorf("Expected HasVolatilityData to be false initially")
+	}
+
+	// Create a node with is_volatile = false
+	setupQuery := `
+		CREATE (f:Function {name: 'Test_Func', id: 'f1', is_volatile: false})
+	`
+	_, err = neo4j.ExecuteQuery(p.ctx, p.driver, setupQuery, nil, neo4j.EagerResultTransformer)
+	if err != nil {
+		t.Fatalf("Failed to setup fixture: %v", err)
+	}
+
+	// Now it should be true, even though there are 0 volatile (true) functions
+	hasData, err = p.HasVolatilityData()
+	if err != nil {
+		t.Fatalf("HasVolatilityData failed: %v", err)
+	}
+	if !hasData {
+		t.Errorf("Expected HasVolatilityData to be true when a function has is_volatile=false")
+	}
+
+	// CountVolatileFunctions should be 0
+	count, err := p.CountVolatileFunctions()
+	if err != nil {
+		t.Fatalf("CountVolatileFunctions failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Expected CountVolatileFunctions to be 0, got %d", count)
+	}
+}
+
