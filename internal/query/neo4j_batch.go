@@ -473,7 +473,7 @@ func (p *Neo4jProvider) CreateBatchJobNode(ctx context.Context, jobID, modelName
 		    j.createdAt = coalesce(j.createdAt, $now),
 		    j.updatedAt = $now
 	`
-	now := time.Now()
+	now := time.Now().UTC()
 	_, err := neo4j.ExecuteQuery(ctx, p.driver, query, map[string]any{
 		"jobID":     jobID,
 		"modelName": modelName,
@@ -495,7 +495,7 @@ func (p *Neo4jProvider) UpdateBatchJobNodeStatus(ctx context.Context, jobID, sta
 		    j.failureReason = $failureReason,
 		    j.updatedAt = $now
 	`
-	now := time.Now()
+	now := time.Now().UTC()
 	_, err := neo4j.ExecuteQuery(ctx, p.driver, query, map[string]any{
 		"jobID":         jobID,
 		"state":         state,
