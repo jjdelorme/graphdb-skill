@@ -34,15 +34,15 @@ This downloads and extracts the `.gemini/` directory structure directly into you
 
 If you want to try the latest beta features (or if the `latest` stable release does not yet include the bundle), you must specify the exact version tag instead of `latest` in the download URL. 
 
-For example, to install `v1.8.412-beta` on Linux/macOS:
+For example, to install `v1.8.414-beta` on Linux/macOS:
 
 ```bash
-curl -sL https://github.com/jjdelorme/graphdb-skill/releases/download/v1.8.412-beta/graphdb-bundle-linux.tar.gz | tar -xzv
+curl -sL https://github.com/jjdelorme/graphdb-skill/releases/download/v1.8.414-beta/graphdb-bundle-linux.tar.gz | tar -xzv
 ```
 
 **(For Windows PowerShell users):**
 ```powershell
-curl.exe -sL https://github.com/jjdelorme/graphdb-skill/releases/download/v1.8.412-beta/graphdb-bundle-windows.tar.gz -o bundle.tar.gz; tar.exe -xzvf bundle.tar.gz; del bundle.tar.gz
+curl.exe -sL https://github.com/jjdelorme/graphdb-skill/releases/download/v1.8.414-beta/graphdb-bundle-windows.tar.gz -o bundle.tar.gz; tar.exe -xzvf bundle.tar.gz; del bundle.tar.gz
 ```
 
 ## ⚙️ Configuration & Credentials
