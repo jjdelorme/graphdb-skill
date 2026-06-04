@@ -64,7 +64,7 @@ func handleEnrichFeatures(args []string) {
 	}
 
 	loc := cfg.GoogleCloudLocation
-	if loc == "" || loc == "global" {
+	if loc == "" {
 		loc = "us-central1"
 	}
 
