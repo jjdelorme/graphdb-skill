@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.406-beta] - 2026-06-04 [Pre-release]
+### Added
+- **Build:** Added `--batch`, `--resume`, and `--gcs-bucket` flags to `build-all` to support split-phase asynchronous feature enrichment.
+- **Docs:** Documented the new split-phase build-all options in `README.md` and `SKILL.md`.
+
 ## [1.8.403-beta] - 2026-06-04 [Pre-release]
 ### Added
 - **Enrich:** Added support for the Vertex AI Gemini Batch API during feature enrichment, enabling bulk processing of feature metadata via GCS and JSONL.
