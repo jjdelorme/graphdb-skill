@@ -29,7 +29,7 @@ func handleQuery(args []string) {
 	directionPtr := fs.String("direction", "outgoing", "Traversal direction: incoming, outgoing, both")
 
 	// Embedder args for 'features' type
-	locationPtr := fs.String("location", "global", "GCP Location")
+	locationPtr := fs.String("location", "", "GCP Location")
 	modelPtr := fs.String("model", "", "Embedding model name")
 
 	fs.Parse(args)
@@ -50,6 +50,11 @@ func handleQuery(args []string) {
 	}
 	if *locationPtr != "" {
 		cfg.GoogleCloudLocation = *locationPtr
+	}
+
+	if cfg.GoogleCloudLocation == "" && os.Getenv("GRAPHDB_MOCK_ENABLED") != "true" {
+		log.Fatal("GOOGLE_CLOUD_LOCATION is not set. Please set it in your .env file or environment.\n" +
+			"Example: export GOOGLE_CLOUD_LOCATION=global")
 	}
 
 	if cfg.Neo4jURI == "" {

@@ -14,7 +14,7 @@ func handleServe(args []string) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	portPtr := fs.Int("port", 8080, "Port to run the HTTP server on")
 	dirPtr := fs.String("dir", "", "Base directory for source files")
-	locationPtr := fs.String("location", "global", "GCP Location")
+	locationPtr := fs.String("location", "", "GCP Location")
 	modelPtr := fs.String("model", "", "Embedding model name")
 
 	fs.Parse(args)
@@ -35,6 +35,11 @@ func handleServe(args []string) {
 	}
 	if *locationPtr != "" {
 		cfg.GoogleCloudLocation = *locationPtr
+	}
+
+	if cfg.GoogleCloudLocation == "" && os.Getenv("GRAPHDB_MOCK_ENABLED") != "true" {
+		fmt.Fprintf(os.Stderr, "Error: GOOGLE_CLOUD_LOCATION is not set. Please set it in your .env file or environment.\n")
+		os.Exit(1)
 	}
 
 	if cfg.Neo4jURI == "" {

@@ -63,10 +63,11 @@ func handleEnrichFeatures(args []string) {
 		}
 	}
 
-	loc := cfg.GoogleCloudLocation
-	if loc == "" {
-		loc = "us-central1"
+	if cfg.GoogleCloudLocation == "" && os.Getenv("GRAPHDB_MOCK_ENABLED") != "true" {
+		log.Fatal("GOOGLE_CLOUD_LOCATION is not set. Please set it in your .env file or environment.\n" +
+			"Example: export GOOGLE_CLOUD_LOCATION=global")
 	}
+	loc := cfg.GoogleCloudLocation
 
 	if cfg.GeminiEmbeddingModel == "" {
 		cfg.GeminiEmbeddingModel = "gemini-embedding-001"
