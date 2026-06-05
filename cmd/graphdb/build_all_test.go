@@ -229,11 +229,12 @@ func TestHandleBuildAll_ResumeMode(t *testing.T) {
 		setupProviderFn = originalSetupProvider
 	}()
 
-	enrichCmd = func(args []string) { checkBatchCalledWith = args }
+	var enrichCalls [][]string
+	enrichCmd = func(args []string) { enrichCalls = append(enrichCalls, args) }
 	enrichHistoryCmd = func(args []string) { enrichHistoryCalled = true }
 	enrichContaminationCmd = func(args []string) { enrichContaminationCalled = true }
 	enrichTestsCmd = func(args []string) { enrichTestsCalled = true }
-
+ 
 	// Mock provider that has 1 completed batch job and 0 active ones
 	mockProvider := &MockProvider{
 		BatchJobCount:   1,
@@ -242,13 +243,21 @@ func TestHandleBuildAll_ResumeMode(t *testing.T) {
 	setupProviderFn = func(cfg config.Config) (query.GraphProvider, error) {
 		return mockProvider, nil
 	}
-
+ 
 	args := []string{"-dir", "test_project", "--resume"}
 	handleBuildAll(args)
-
-	expectedCheckBatch := []string{"--check-batch"}
-	if !reflect.DeepEqual(checkBatchCalledWith, expectedCheckBatch) {
-		t.Errorf("Check-batch args mismatch.\nGot: %v\nWant: %v", checkBatchCalledWith, expectedCheckBatch)
+ 
+	if len(enrichCalls) != 2 {
+		t.Errorf("Expected enrichCmd to be called exactly twice, got %d times", len(enrichCalls))
+	} else {
+		expectedCheckBatch := []string{"--check-batch"}
+		if !reflect.DeepEqual(enrichCalls[0], expectedCheckBatch) {
+			t.Errorf("First enrich call args mismatch.\nGot: %v\nWant: %v", enrichCalls[0], expectedCheckBatch)
+		}
+		expectedLocalEnrich := []string{"-dir", "test_project"}
+		if !reflect.DeepEqual(enrichCalls[1], expectedLocalEnrich) {
+			t.Errorf("Second enrich call args mismatch.\nGot: %v\nWant: %v", enrichCalls[1], expectedLocalEnrich)
+		}
 	}
 
 	// Verify remaining phases WERE called (as active batch jobs is 0)

@@ -78,6 +78,11 @@ func handleBuildAll(args []string) {
 			return
 		}
 
+		// Run remaining local feature enrichment steps (embeddings, clustering & summarization)
+		fmt.Println("\nRunning remaining local feature enrichment steps (embeddings, clustering & summarization)...")
+		enrichArgs := []string{"-dir", *dirPtr}
+		enrichCmd(enrichArgs)
+
 		fmt.Println("\n✅ Feature enrichment is complete. Resuming remaining build phases...")
 
 		// 4. Enrich History
