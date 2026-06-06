@@ -5,9 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.424-beta] - 2026-06-06 [Pre-release]
+### Added
+- **Parser:** Improved test file detection heuristics in `IsTestFile` to accurately classify Python test patterns (such as `test_*.py`, `*_test.py` files, and `tests/` directories).
+
+### Fixed
+- **Ingest:** Refactored the directory walker to dynamically ignore nested git repositories and worktrees by checking for a `.git` entry, and rely completely on the project's `.gitignore` rules for skipping dependency/build artifacts (like `node_modules` and virtual environments).
+
 ## [1.8.422-beta] - 2026-06-05 [Pre-release]
 ### Fixed
 - **Build:** Fixed a bug in `build-all --resume` where completing a Vertex AI Batch prediction job and importing the atomic features from GCS would exit early and fail to execute the remaining local enrichment phases (embeddings, clustering, and summarization). The resume process now correctly proceeds to finalize Phase 3 before starting Phase 4 (Git History).
+
 
 ## [1.8.421-beta] - 2026-06-04 [Pre-release]
 ### Fixed

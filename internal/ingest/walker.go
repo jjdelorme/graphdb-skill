@@ -110,9 +110,16 @@ func (w *Walker) walkRecursiveWithPatterns(ctx context.Context, rootPath string,
 		fullPath := filepath.Join(currentPath, d.Name())
 		isDir := d.IsDir()
 
-		// Always ignore .git directory
+		// Always ignore the internal .git directory to prevent indexing VCS metadata
 		if isDir && d.Name() == ".git" {
 			continue
+		}
+
+		// Dynamically ignore nested git repositories or worktrees (which contain their own .git entry)
+		if isDir {
+			if _, err := os.Stat(filepath.Join(fullPath, ".git")); err == nil {
+				continue
+			}
 		}
 
 		// Check ignored status

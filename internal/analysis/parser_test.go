@@ -72,6 +72,11 @@ func TestIsTestFile(t *testing.T) {
 		{"src/app.test.ts", true},
 		{"src/app.spec.ts", true},
 		{"src/app.ts", false},
+		{"tests/integration/test_admin_endpoints_r2.py", true},
+		{"test_admin_endpoints_r2.py", true},
+		{"my_module_test.py", true},
+		{"src/test/helpers.py", true},
+		{"test/foo.py", true},
 	}
 
 	for _, tt := range tests {
