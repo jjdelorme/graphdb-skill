@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-06-08
+### Added
+- **API:** Added Vertex AI Gemini Batch API support for feature enrichment.
+- **CLI:** Implemented split-phase `--batch` and `--resume` workflow in `build-all`.
+- **CLI:** Implemented `--clean` flag in `build-all` command to force a database wipe and full rebuild.
+
+### Fixed
+- **API:** Set `DisplayName` on `CreateBatchJobConfig` to resolve Vertex AI invalid argument errors.
+- **API:** Removed hardcoded default locations and enforce `GOOGLE_CLOUD_LOCATION`.
+- **API:** Allowed global location for batch jobs by removing `us-central1` override.
+- **API:** Converted `time.Now()` to UTC in batch job database queries to avoid `tz_id` errors.
+- **Parsing:** Use `rpg.ParseLLMJSON` for robust batch result unmarshalling.
+- **Parsing:** Parse both `descriptors` and `is_volatile` from batch response JSONL.
+- **CLI:** Fixed resume pipeline in `build-all` to ensure local enrichment phases execute after batch jobs.
+- **Ingest:** Improved test file detection heuristics for Python test patterns.
+- **Ingest:** Refactored directory walker to accurately skip nested git repositories and worktrees.
+
+### Documentation
+- **Docs:** Documented Vertex AI Batch API enrichment options.
+- **Docs:** Added design document for C++ and Python cross-file call resolution.
+
 ## [1.8.424-beta] - 2026-06-06 [Pre-release]
 ### Added
 - **Parser:** Improved test file detection heuristics in `IsTestFile` to accurately classify Python test patterns (such as `test_*.py`, `*_test.py` files, and `tests/` directories).
