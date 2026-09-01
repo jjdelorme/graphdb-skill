@@ -362,4 +362,19 @@ Plan: Ref: `plans/12_CAMPAIGN_D3_VISUALIZER.md`
 - [x] Enforce `-limit` flag down to Cypher in `GetNeighbors`.
 - [x] Add `-summary` flag to CLI for count-based structural views.
 
+### Campaign 20: Dual-Lens Structural Partitioning (CPM Leiden & Feathers Handshake)
+**Goal:** Implement a pure Go Constant Potts Model (CPM) Leiden Community Detection engine with inverse-degree hub suppression and Feathers seam score handshakes. Establishes a Dual-Lens architecture contrasting physical execution coupling against semantic RPG intent to pinpoint actionable refactoring seams.
+**Status:** Planned
+**Plan:** Ref: `plans/20_CAMPAIGN_DUAL_LENS_LEIDEN_TOPOLOGY.md`
+**Key Deliverables:**
+- [ ] **Pure Go CPM Leiden Engine:** Resolution-free modularity with dynamic $\gamma$, seed determinism, and recursive hierarchical sub-clustering.
+- [ ] **Two-Tier Hub Suppression:** Inverse-degree logarithmic damping and top 1% hub quarantine (`:CrossCuttingHub`).
+- [ ] **Overlapping Infrastructure Support:** Boundary Participation Ratio (BPR) classifying `:SharedBoundary` components with `[:BRIDGES]` edges.
+- [ ] **Feathers Seam Handshake:** Actionable Seam Score ranker ($\frac{\text{Fan-In} \times \text{Volatile Fan-Out}}{\text{Cut-Edges} + 1}$) surfacing $\le 4$ cut-edge interface extraction recipes.
+- [ ] **Zero-Token Offline Mode:** High-speed local CPU-only structural partitioning (`--offline` / `--quick`).
+- [ ] **Visualizer Architecture X-Ray:** Dual-Lens heatmap overlay with structural convex hulls and semantic intent node coloring.
+
+---
+
 Task Verified. Tests Passed. Code Clean. No Shortcuts Detected.
+
