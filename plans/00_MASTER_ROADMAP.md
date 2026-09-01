@@ -364,15 +364,15 @@ Plan: Ref: `plans/12_CAMPAIGN_D3_VISUALIZER.md`
 
 ### Campaign 20: Dual-Lens Structural Partitioning (CPM Leiden & Feathers Handshake)
 **Goal:** Implement a pure Go Constant Potts Model (CPM) Leiden Community Detection engine with inverse-degree hub suppression and Feathers seam score handshakes. Establishes a Dual-Lens architecture contrasting physical execution coupling against semantic RPG intent to pinpoint actionable refactoring seams.
-**Status:** Planned
+**Status:** Completed
 **Plan:** Ref: `plans/20_CAMPAIGN_DUAL_LENS_LEIDEN_TOPOLOGY.md`
 **Key Deliverables:**
-- [ ] **Pure Go CPM Leiden Engine:** Resolution-free modularity with dynamic $\gamma$, seed determinism, and recursive hierarchical sub-clustering.
-- [ ] **Two-Tier Hub Suppression:** Inverse-degree logarithmic damping and top 1% hub quarantine (`:CrossCuttingHub`).
-- [ ] **Overlapping Infrastructure Support:** Boundary Participation Ratio (BPR) classifying `:SharedBoundary` components with `[:BRIDGES]` edges.
-- [ ] **Feathers Seam Handshake:** Actionable Seam Score ranker ($\frac{\text{Fan-In} \times \text{Volatile Fan-Out}}{\text{Cut-Edges} + 1}$) surfacing $\le 4$ cut-edge interface extraction recipes.
-- [ ] **Zero-Token Offline Mode:** High-speed local CPU-only structural partitioning (`--offline` / `--quick`).
-- [ ] **Visualizer Architecture X-Ray:** Dual-Lens heatmap overlay with structural convex hulls and semantic intent node coloring.
+- [x] **Pure Go CPM Leiden Engine:** Resolution-free modularity with dynamic $\gamma$, seed determinism, and recursive hierarchical sub-clustering.
+- [x] **Two-Tier Hub Suppression:** Inverse-degree logarithmic damping and top 1% hub quarantine (`:CrossCuttingHub`).
+- [x] **Overlapping Infrastructure Support:** Boundary Participation Ratio (BPR) classifying `:SharedBoundary` components with `[:BRIDGES]` edges.
+- [x] **Feathers Seam Handshake:** Actionable Seam Score ranker ($\frac{\text{Fan-In} \times \text{Volatile Fan-Out}}{\text{Cut-Edges} + 1}$) surfacing $\le 4$ cut-edge interface extraction recipes.
+- [x] **Zero-Token Offline Mode:** High-speed local CPU-only structural partitioning (`--offline` / `--quick`).
+- [x] **Visualizer Architecture X-Ray:** Dual-Lens heatmap overlay with structural convex hulls and semantic intent node coloring.
 
 ---
 

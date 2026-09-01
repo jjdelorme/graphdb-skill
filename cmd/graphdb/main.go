@@ -15,6 +15,7 @@ var (
 	ingestCmd              = handleIngest
 	enrichCmd              = handleEnrichFeatures
 	importCmd              = handleImport
+	enrichTopologyCmd      = handleEnrichTopology
 	enrichHistoryCmd       = handleEnrichHistory
 	enrichContaminationCmd = handleEnrichContamination
 	enrichTestsCmd         = handleEnrichTests
@@ -66,6 +67,8 @@ func main() {
 		handleQuery(cmdArgs)
 	case "enrich-features":
 		enrichCmd(cmdArgs)
+	case "enrich-topology":
+		enrichTopologyCmd(cmdArgs)
 	case "enrich-contamination":
 		handleEnrichContamination(cmdArgs)
 	case "enrich-history":
@@ -97,6 +100,7 @@ func printUsage() {
 	fmt.Println("\nCommands:")
 	fmt.Println("  ingest                 Parse code and generate graph nodes/edges (JSONL)")
 	fmt.Println("  enrich-features        Build the RPG (Repository Planning Graph) Intent Layer")
+	fmt.Println("  enrich-topology        Detect structural communities using CPM Leiden algorithm")
 	fmt.Println("  enrich-contamination   Identify seams and propagate contamination layers")
 	fmt.Println("  enrich-history         Analyze git history to find hotspots and co-changes")
 	fmt.Println("  enrich-tests           Link tests to production functions")

@@ -180,6 +180,22 @@ func (m *MockGraphProvider) ExploreDomain(featureID string) (*query.DomainExplor
 	return nil, nil
 }
 
+func (m *MockGraphProvider) GetDualLensSeams(ctx context.Context, modulePattern string, minScore float64, maxCutEdges int, limit int) ([]*query.DualLensSeamResult, error) {
+	return nil, nil
+}
+func (m *MockGraphProvider) GetDivergence(ctx context.Context, domainPattern string) ([]*query.DomainDivergenceResult, error) {
+	return nil, nil
+}
+func (m *MockGraphProvider) GetCommunities(ctx context.Context, limit int) ([]*query.StructuralCommunityResult, error) {
+	return nil, nil
+}
+func (m *MockGraphProvider) ClearStructuralTopology() error {
+	return nil
+}
+func (m *MockGraphProvider) UpdateStructuralTopology(nodes []*graph.Node, edges []*graph.Edge) error {
+	return nil
+}
+
 func (m *MockGraphProvider) CreateBatchJobNode(ctx context.Context, jobID, modelName, gcsInput, gcsOutput string) error {
 	return nil
 }

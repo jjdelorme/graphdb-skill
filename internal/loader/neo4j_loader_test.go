@@ -78,8 +78,28 @@ func TestGetConstraints(t *testing.T) {
 	
 	hasFeatureVectorIndex := false
 	hasFunctionVectorIndex := false
+	hasStructuralCommConstraint := false
+	hasStructuralCommNameIndex := false
+	hasStructuralCommSizeIndex := false
+	hasSharedBoundaryIndex := false
+	hasCrossCuttingHubIndex := false
 	
 	for _, q := range constraints {
+		if strings.Contains(q, "CREATE CONSTRAINT IF NOT EXISTS FOR (c:StructuralCommunity) REQUIRE c.id IS UNIQUE") {
+			hasStructuralCommConstraint = true
+		}
+		if strings.Contains(q, "CREATE INDEX IF NOT EXISTS FOR (c:StructuralCommunity) ON (c.name)") {
+			hasStructuralCommNameIndex = true
+		}
+		if strings.Contains(q, "CREATE INDEX IF NOT EXISTS FOR (c:StructuralCommunity) ON (c.size)") {
+			hasStructuralCommSizeIndex = true
+		}
+		if strings.Contains(q, "CREATE INDEX IF NOT EXISTS FOR (n:SharedBoundary) ON (n.id)") {
+			hasSharedBoundaryIndex = true
+		}
+		if strings.Contains(q, "CREATE INDEX IF NOT EXISTS FOR (n:CrossCuttingHub) ON (n.id)") {
+			hasCrossCuttingHubIndex = true
+		}
 		if strings.Contains(q, "CREATE VECTOR INDEX feature_embeddings") {
 			hasFeatureVectorIndex = true
 			if !strings.Contains(q, "FOR (n:Feature) ON (n.embedding)") {
@@ -97,6 +117,21 @@ func TestGetConstraints(t *testing.T) {
 		}
 	}
 	
+	if !hasStructuralCommConstraint {
+		t.Error("Missing :StructuralCommunity(id) uniqueness constraint")
+	}
+	if !hasStructuralCommNameIndex {
+		t.Error("Missing :StructuralCommunity(name) index")
+	}
+	if !hasStructuralCommSizeIndex {
+		t.Error("Missing :StructuralCommunity(size) index")
+	}
+	if !hasSharedBoundaryIndex {
+		t.Error("Missing :SharedBoundary(id) index")
+	}
+	if !hasCrossCuttingHubIndex {
+		t.Error("Missing :CrossCuttingHub(id) index")
+	}
 	if !hasFeatureVectorIndex {
 		t.Error("Missing feature_embeddings vector index")
 	}

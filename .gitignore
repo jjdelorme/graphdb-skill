@@ -37,6 +37,7 @@ test/output/
 
 # Agent Workspaces and Scratch Files
 .agents/
+.cm_project
 ORIGINAL_REQUEST.md
 PROJECT.md
 TEST_INFRA.md

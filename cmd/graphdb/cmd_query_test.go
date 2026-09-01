@@ -108,3 +108,76 @@ func TestMockProvider_GetSemanticSeams(t *testing.T) {
 		t.Errorf("Expected similarity 0.1, got %f", results[0].Similarity)
 	}
 }
+
+func TestHandleQuery_DualLensSeams(t *testing.T) {
+	os.Setenv("GRAPHDB_MOCK_ENABLED", "true")
+	os.Setenv("NEO4J_URI", "bolt://localhost:7687")
+	defer os.Unsetenv("GRAPHDB_MOCK_ENABLED")
+	defer os.Unsetenv("NEO4J_URI")
+
+	args := []string{"-type", "seams", "--dual-lens", "-min-score", "10.0", "-max-cut-edges", "4", "-limit", "10"}
+	handleQuery(args)
+}
+
+func TestHandleQuery_Divergence(t *testing.T) {
+	os.Setenv("GRAPHDB_MOCK_ENABLED", "true")
+	os.Setenv("NEO4J_URI", "bolt://localhost:7687")
+	defer os.Unsetenv("GRAPHDB_MOCK_ENABLED")
+	defer os.Unsetenv("NEO4J_URI")
+
+	args := []string{"-type", "divergence", "-domain", "Billing"}
+	handleQuery(args)
+}
+
+func TestHandleQuery_Communities(t *testing.T) {
+	os.Setenv("GRAPHDB_MOCK_ENABLED", "true")
+	os.Setenv("NEO4J_URI", "bolt://localhost:7687")
+	defer os.Unsetenv("GRAPHDB_MOCK_ENABLED")
+	defer os.Unsetenv("NEO4J_URI")
+
+	args := []string{"-type", "communities", "-limit", "25"}
+	handleQuery(args)
+}
+
+func TestMockProvider_DualLensMethods(t *testing.T) {
+	mock := &MockProvider{}
+	ctx := context.Background()
+
+	seams, err := mock.GetDualLensSeams(ctx, ".*", 10.0, 4, 20)
+	if err != nil || len(seams) == 0 {
+		t.Fatalf("Expected non-empty dual lens seams from mock, got %v, err=%v", seams, err)
+	}
+	if seams[0].ID != "func_mock_1" || seams[0].Score < 10.0 {
+		t.Errorf("Unexpected seam from mock: %+v", seams[0])
+	}
+
+	div, err := mock.GetDivergence(ctx, "Billing")
+	if err != nil || len(div) == 0 {
+		t.Fatalf("Expected non-empty divergence from mock, got %v, err=%v", div, err)
+	}
+	if div[0].DomainName != "Billing" {
+		t.Errorf("Unexpected domain name: %s", div[0].DomainName)
+	}
+
+	comms, err := mock.GetCommunities(ctx, 10)
+	if err != nil || len(comms) == 0 {
+		t.Fatalf("Expected non-empty communities from mock, got %v, err=%v", comms, err)
+	}
+	if comms[0].ID != "comm-1" {
+		t.Errorf("Unexpected community ID: %s", comms[0].ID)
+	}
+
+	if err := mock.ClearStructuralTopology(); err != nil {
+		t.Errorf("Unexpected error clearing structural topology: %v", err)
+	}
+	if !mock.ClearStructuralTopologyCalled {
+		t.Error("Expected ClearStructuralTopologyCalled to be true")
+	}
+
+	if err := mock.UpdateStructuralTopology(nil, nil); err != nil {
+		t.Errorf("Unexpected error updating structural topology: %v", err)
+	}
+	if !mock.UpdateStructuralTopologyCalled {
+		t.Error("Expected UpdateStructuralTopologyCalled to be true")
+	}
+}

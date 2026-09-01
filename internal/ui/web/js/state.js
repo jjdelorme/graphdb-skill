@@ -5,13 +5,18 @@ export const linksMap = new Map();
 
 export const state = {
     lastSelectedNode: null,
-    labelsVisible: true
+    labelsVisible: true,
+    showHulls: true,
+    showDualLens: false,
+    selectedCommunity: null
 };
 
 export const visibilitySettings = {
     showPhysical: true,
     showSemantic: true,
-    showTests: true
+    showTests: true,
+    showHulls: true,
+    showDualLens: false
 };
 
 export const seamState = {

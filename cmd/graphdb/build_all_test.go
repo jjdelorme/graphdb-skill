@@ -15,6 +15,7 @@ func TestHandleBuildAll_ImportsBothGraphs(t *testing.T) {
 	// 1. Setup Mocks
 	var ingestCalledWith []string
 	var enrichCalledWith []string
+	var enrichTopologyCalledWith []string
 	var enrichHistoryCalledWith []string
 	var enrichContaminationCalledWith []string
 	var enrichTestsCalledWith []string
@@ -24,6 +25,7 @@ func TestHandleBuildAll_ImportsBothGraphs(t *testing.T) {
 	originalIngest := ingestCmd
 	originalEnrich := enrichCmd
 	originalImport := importCmd
+	originalEnrichTopology := enrichTopologyCmd
 	originalEnrichHistory := enrichHistoryCmd
 	originalEnrichContamination := enrichContaminationCmd
 	originalEnrichTests := enrichTestsCmd
@@ -31,6 +33,7 @@ func TestHandleBuildAll_ImportsBothGraphs(t *testing.T) {
 		ingestCmd = originalIngest
 		enrichCmd = originalEnrich
 		importCmd = originalImport
+		enrichTopologyCmd = originalEnrichTopology
 		enrichHistoryCmd = originalEnrichHistory
 		enrichContaminationCmd = originalEnrichContamination
 		enrichTestsCmd = originalEnrichTests
@@ -41,6 +44,9 @@ func TestHandleBuildAll_ImportsBothGraphs(t *testing.T) {
 	}
 	enrichCmd = func(args []string) {
 		enrichCalledWith = args
+	}
+	enrichTopologyCmd = func(args []string) {
+		enrichTopologyCalledWith = args
 	}
 	importCmd = func(args []string) {
 		importCalls = append(importCalls, args)
@@ -71,6 +77,12 @@ func TestHandleBuildAll_ImportsBothGraphs(t *testing.T) {
 	expectedEnrich := []string{"-dir", "test_project"}
 	if !reflect.DeepEqual(enrichCalledWith, expectedEnrich) {
 		t.Errorf("Enrich args mismatch.\nGot: %v\nWant: %v", enrichCalledWith, expectedEnrich)
+	}
+
+	// Verify Enrich Topology
+	expectedEnrichTopology := []string{"-dir", "test_project"}
+	if !reflect.DeepEqual(enrichTopologyCalledWith, expectedEnrichTopology) {
+		t.Errorf("Enrich Topology args mismatch.\nGot: %v\nWant: %v", enrichTopologyCalledWith, expectedEnrichTopology)
 	}
 
 	// Verify Enrich History
@@ -109,6 +121,7 @@ func TestHandleBuildAll_CleansUpIntermediateFiles(t *testing.T) {
 	originalIngest := ingestCmd
 	originalEnrich := enrichCmd
 	originalImport := importCmd
+	originalEnrichTopology := enrichTopologyCmd
 	originalEnrichHistory := enrichHistoryCmd
 	originalEnrichContamination := enrichContaminationCmd
 	originalEnrichTests := enrichTestsCmd
@@ -117,6 +130,7 @@ func TestHandleBuildAll_CleansUpIntermediateFiles(t *testing.T) {
 		ingestCmd = originalIngest
 		enrichCmd = originalEnrich
 		importCmd = originalImport
+		enrichTopologyCmd = originalEnrichTopology
 		enrichHistoryCmd = originalEnrichHistory
 		enrichContaminationCmd = originalEnrichContamination
 		enrichTestsCmd = originalEnrichTests
@@ -124,6 +138,7 @@ func TestHandleBuildAll_CleansUpIntermediateFiles(t *testing.T) {
 
 	ingestCmd = func(args []string) {}
 	enrichCmd = func(args []string) {}
+	enrichTopologyCmd = func(args []string) {}
 	importCmd = func(args []string) {}
 	enrichHistoryCmd = func(args []string) {}
 	enrichContaminationCmd = func(args []string) {}
@@ -163,6 +178,7 @@ func TestHandleBuildAll_BatchMode(t *testing.T) {
 
 	var ingestCalled bool
 	var enrichCalledWith []string
+	var enrichTopologyCalled bool
 	var enrichHistoryCalled bool
 	var enrichContaminationCalled bool
 	var enrichTestsCalled bool
@@ -170,6 +186,7 @@ func TestHandleBuildAll_BatchMode(t *testing.T) {
 	originalIngest := ingestCmd
 	originalEnrich := enrichCmd
 	originalImport := importCmd
+	originalEnrichTopology := enrichTopologyCmd
 	originalEnrichHistory := enrichHistoryCmd
 	originalEnrichContamination := enrichContaminationCmd
 	originalEnrichTests := enrichTestsCmd
@@ -178,6 +195,7 @@ func TestHandleBuildAll_BatchMode(t *testing.T) {
 		ingestCmd = originalIngest
 		enrichCmd = originalEnrich
 		importCmd = originalImport
+		enrichTopologyCmd = originalEnrichTopology
 		enrichHistoryCmd = originalEnrichHistory
 		enrichContaminationCmd = originalEnrichContamination
 		enrichTestsCmd = originalEnrichTests
@@ -185,6 +203,7 @@ func TestHandleBuildAll_BatchMode(t *testing.T) {
 
 	ingestCmd = func(args []string) { ingestCalled = true }
 	enrichCmd = func(args []string) { enrichCalledWith = args }
+	enrichTopologyCmd = func(args []string) { enrichTopologyCalled = true }
 	importCmd = func(args []string) { }
 	enrichHistoryCmd = func(args []string) { enrichHistoryCalled = true }
 	enrichContaminationCmd = func(args []string) { enrichContaminationCalled = true }
@@ -202,7 +221,7 @@ func TestHandleBuildAll_BatchMode(t *testing.T) {
 		t.Errorf("Enrich args mismatch.\nGot: %v\nWant: %v", enrichCalledWith, expectedEnrich)
 	}
 
-	if enrichHistoryCalled || enrichContaminationCalled || enrichTestsCalled {
+	if enrichTopologyCalled || enrichHistoryCalled || enrichContaminationCalled || enrichTestsCalled {
 		t.Error("Expected remaining phases to NOT be called in batch mode")
 	}
 }
@@ -210,12 +229,13 @@ func TestHandleBuildAll_BatchMode(t *testing.T) {
 func TestHandleBuildAll_ResumeMode(t *testing.T) {
 	t.Setenv("GRAPHDB_MOCK_ENABLED", "true")
 
-	var checkBatchCalledWith []string
+	var enrichTopologyCalled bool
 	var enrichHistoryCalled bool
 	var enrichContaminationCalled bool
 	var enrichTestsCalled bool
 
 	originalEnrich := enrichCmd
+	originalEnrichTopology := enrichTopologyCmd
 	originalEnrichHistory := enrichHistoryCmd
 	originalEnrichContamination := enrichContaminationCmd
 	originalEnrichTests := enrichTestsCmd
@@ -223,6 +243,7 @@ func TestHandleBuildAll_ResumeMode(t *testing.T) {
 
 	defer func() {
 		enrichCmd = originalEnrich
+		enrichTopologyCmd = originalEnrichTopology
 		enrichHistoryCmd = originalEnrichHistory
 		enrichContaminationCmd = originalEnrichContamination
 		enrichTestsCmd = originalEnrichTests
@@ -231,6 +252,7 @@ func TestHandleBuildAll_ResumeMode(t *testing.T) {
 
 	var enrichCalls [][]string
 	enrichCmd = func(args []string) { enrichCalls = append(enrichCalls, args) }
+	enrichTopologyCmd = func(args []string) { enrichTopologyCalled = true }
 	enrichHistoryCmd = func(args []string) { enrichHistoryCalled = true }
 	enrichContaminationCmd = func(args []string) { enrichContaminationCalled = true }
 	enrichTestsCmd = func(args []string) { enrichTestsCalled = true }
@@ -261,6 +283,9 @@ func TestHandleBuildAll_ResumeMode(t *testing.T) {
 	}
 
 	// Verify remaining phases WERE called (as active batch jobs is 0)
+	if !enrichTopologyCalled {
+		t.Error("Expected enrichTopologyCmd to be called upon resume completion")
+	}
 	if !enrichHistoryCalled {
 		t.Error("Expected enrichHistoryCmd to be called upon resume completion")
 	}
@@ -277,12 +302,14 @@ func TestHandleBuildAll_CleanMode(t *testing.T) {
 
 	var ingestCalledWith []string
 	var enrichCalled bool
+	var enrichTopologyCalled bool
 	var importCalled bool
 	var wipeCalled bool
 
 	originalIngest := ingestCmd
 	originalEnrich := enrichCmd
 	originalImport := importCmd
+	originalEnrichTopology := enrichTopologyCmd
 	originalEnrichHistory := enrichHistoryCmd
 	originalEnrichContamination := enrichContaminationCmd
 	originalEnrichTests := enrichTestsCmd
@@ -292,6 +319,7 @@ func TestHandleBuildAll_CleanMode(t *testing.T) {
 		ingestCmd = originalIngest
 		enrichCmd = originalEnrich
 		importCmd = originalImport
+		enrichTopologyCmd = originalEnrichTopology
 		enrichHistoryCmd = originalEnrichHistory
 		enrichContaminationCmd = originalEnrichContamination
 		enrichTestsCmd = originalEnrichTests
@@ -300,6 +328,7 @@ func TestHandleBuildAll_CleanMode(t *testing.T) {
 
 	ingestCmd = func(args []string) { ingestCalledWith = args }
 	enrichCmd = func(args []string) { enrichCalled = true }
+	enrichTopologyCmd = func(args []string) { enrichTopologyCalled = true }
 	importCmd = func(args []string) { importCalled = true }
 	enrichHistoryCmd = func(args []string) {}
 	enrichContaminationCmd = func(args []string) {}
@@ -335,6 +364,10 @@ func TestHandleBuildAll_CleanMode(t *testing.T) {
 
 	if !enrichCalled {
 		t.Error("Expected enrich to run in clean mode")
+	}
+
+	if !enrichTopologyCalled {
+		t.Error("Expected enrich-topology to run in clean mode")
 	}
 }
 

@@ -1,6 +1,6 @@
 # Campaign 20: Dual-Lens Structural Partitioning (CPM Leiden & Feathers Handshake)
 
-**Status:** Planned  
+**Status:** Completed  
 **Architecture Lead:** Principal Systems Architect & Adversarial Review Team  
 **Dependencies:** CPG Ingestion (Phase 1), Neo4j Persistence (Phase 2), RPG Semantic Layer (Campaign 3.8), Feathers Suite (Campaign 11)  
 
@@ -85,31 +85,31 @@ $$\text{ActionableSeamScore}(S) = \frac{\text{Internal Fan-In} \times \text{Vola
 ## 📦 Key Deliverables & Implementation Phases
 
 ### Phase 1: Pure Go CPM Leiden Engine (`internal/analysis/leiden/`)
-- [ ] Implement in-memory graph representation with weighted typed edges.
-- [ ] Implement Inverse-Degree Logarithmic Edge Damping & Degree Centrality calculation.
-- [ ] Implement Constant Potts Model (CPM) Leiden partitioner with deterministic seed support (`-seed 42`).
-- [ ] Implement adaptive $\gamma$ search and recursive hierarchical sub-clustering.
-- [ ] Implement Boundary Participation Ratio (BPR) calculator.
-- [ ] Unit tests on synthetic monolith and benchmark graphs (`leiden_test.go`).
+- [x] Implement in-memory graph representation with weighted typed edges.
+- [x] Implement Inverse-Degree Logarithmic Edge Damping & Degree Centrality calculation.
+- [x] Implement Constant Potts Model (CPM) Leiden partitioner with deterministic seed support (`-seed 42`).
+- [x] Implement adaptive $\gamma$ search and recursive hierarchical sub-clustering.
+- [x] Implement Boundary Participation Ratio (BPR) calculator.
+- [x] Unit tests on synthetic monolith and benchmark graphs (`leiden_test.go`).
 
 ### Phase 2: Ingestion & Neo4j Graph Schema Persistence
-- [ ] Add `:StructuralCommunity`, `:SharedBoundary`, and `:CrossCuttingHub` node definitions in `internal/graph/schema.go`.
-- [ ] Add Cypher batch writers in `internal/loader/` using `UNWIND` batches.
-- [ ] Connect CLI command `graphdb enrich-topology` with flags (`-gamma`, `-min-size`, `-max-size`, `-suppress-hubs`).
-- [ ] Implement `--offline` / `--quick` fast-path for zero-token air-gapped monolith indexing.
+- [x] Add `:StructuralCommunity`, `:SharedBoundary`, and `:CrossCuttingHub` node definitions in `internal/graph/schema.go`.
+- [x] Add Cypher batch writers in `internal/loader/` using `UNWIND` batches.
+- [x] Connect CLI command `graphdb enrich-topology` with flags (`-gamma`, `-min-size`, `-max-size`, `-suppress-hubs`).
+- [x] Implement `--offline` / `--quick` fast-path for zero-token air-gapped monolith indexing.
 
 ### Phase 3: Dual-Lens Divergence & Feathers Seam Handshake
-- [ ] Implement `internal/analysis/divergence.go` comparing `:StructuralCommunity` vs `:Domain`.
-- [ ] Implement Seam Actionability ranker integrating `GetSeams` ([`neo4j.go:GetSeams`](file:///home/jasondel/dev/graphdb-skill/internal/query/neo4j.go#L657-L742)).
-- [ ] Register CLI query commands in `cmd/graphdb/cmd_query.go`:
+- [x] Implement `internal/analysis/divergence.go` comparing `:StructuralCommunity` vs `:Domain`.
+- [x] Implement Seam Actionability ranker integrating `GetSeams` ([`neo4j.go:GetSeams`](file:///home/jasondel/dev/graphdb-skill/internal/query/neo4j.go#L657-L742)).
+- [x] Register CLI query commands in `cmd/graphdb/cmd_query.go`:
   - `graphdb query seams --dual-lens`
   - `graphdb query divergence --domain <name>`
   - `graphdb query communities`
 
 ### Phase 4: Web Visualizer & Agent Swarm Integration
-- [ ] Update D3 force-directed visualizer (`internal/ui/web/`) with a "Dual-Lens Architecture X-Ray" overlay.
-- [ ] Add visual convex hull bubbles for `:StructuralCommunity` partitions with internal semantic domain coloring.
-- [ ] Update Scout and Architect agent prompts in `.gemini/agents/` to use structural community boundaries for conflict-free subagent dispatch.
+- [x] Update D3 force-directed visualizer (`internal/ui/web/`) with a "Dual-Lens Architecture X-Ray" overlay.
+- [x] Add visual convex hull bubbles for `:StructuralCommunity` partitions with internal semantic domain coloring.
+- [x] Update Scout and Architect agent prompts in `.gemini/agents/` to use structural community boundaries for conflict-free subagent dispatch.
 
 ---
 

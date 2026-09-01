@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -49,7 +50,10 @@ type mockGraphProvider struct {
 	SearchSimilarFunctionsFunc func(queryStr string, embedding []float32, limit int) ([]*query.FeatureResult, error)
 	WhatIfFunc                 func(targets []string) (*query.WhatIfResult, error)
 	SemanticTraceFunc          func(target string) ([]*graph.Path, error)
-	}
+	GetCommunitiesFunc         func(ctx context.Context, limit int) ([]*query.StructuralCommunityResult, error)
+	GetDivergenceFunc          func(ctx context.Context, domainPattern string) ([]*query.DomainDivergenceResult, error)
+	GetDualLensSeamsFunc       func(ctx context.Context, modulePattern string, minScore float64, maxCutEdges int, limit int) ([]*query.DualLensSeamResult, error)
+}
 
 func (m *mockGraphProvider) GetNeighbors(target string, depth int, limit int) (*query.NeighborResult, error) {
 	if m.getNeighborsFunc != nil {
@@ -75,6 +79,27 @@ func (m *mockGraphProvider) WhatIf(targets []string) (*query.WhatIfResult, error
 func (m *mockGraphProvider) SemanticTrace(target string) ([]*graph.Path, error) {
 	if m.SemanticTraceFunc != nil {
 		return m.SemanticTraceFunc(target)
+	}
+	return nil, nil
+}
+
+func (m *mockGraphProvider) GetCommunities(ctx context.Context, limit int) ([]*query.StructuralCommunityResult, error) {
+	if m.GetCommunitiesFunc != nil {
+		return m.GetCommunitiesFunc(ctx, limit)
+	}
+	return nil, nil
+}
+
+func (m *mockGraphProvider) GetDivergence(ctx context.Context, domainPattern string) ([]*query.DomainDivergenceResult, error) {
+	if m.GetDivergenceFunc != nil {
+		return m.GetDivergenceFunc(ctx, domainPattern)
+	}
+	return nil, nil
+}
+
+func (m *mockGraphProvider) GetDualLensSeams(ctx context.Context, modulePattern string, minScore float64, maxCutEdges int, limit int) ([]*query.DualLensSeamResult, error) {
+	if m.GetDualLensSeamsFunc != nil {
+		return m.GetDualLensSeamsFunc(ctx, modulePattern, minScore, maxCutEdges, limit)
 	}
 	return nil, nil
 }
@@ -230,5 +255,127 @@ func TestQuerySemanticTrace(t *testing.T) {
 
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+}
+
+func TestQueryCommunities(t *testing.T) {
+	mockProvider := &mockGraphProvider{
+		GetCommunitiesFunc: func(ctx context.Context, limit int) ([]*query.StructuralCommunityResult, error) {
+			if limit != 100 {
+				t.Errorf("expected limit 100, got %d", limit)
+			}
+			return []*query.StructuralCommunityResult{
+				{
+					ID:      "1",
+					Name:    "AuthCommunity",
+					Size:    42,
+					Density: 0.85,
+				},
+			}, nil
+		},
+	}
+	s := NewServer(mockProvider, nil, config.Config{}, "test")
+
+	req, err := http.NewRequest("GET", "/api/query?type=communities&limit=100", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var response []*query.StructuralCommunityResult
+	err = json.Unmarshal(rr.Body.Bytes(), &response)
+	if err != nil {
+		t.Fatalf("handler returned invalid json: %v", err)
+	}
+	if len(response) != 1 || response[0].ID != "1" {
+		t.Errorf("unexpected communities response: %v", response)
+	}
+}
+
+func TestQueryDivergence(t *testing.T) {
+	mockProvider := &mockGraphProvider{
+		GetDivergenceFunc: func(ctx context.Context, domainPattern string) ([]*query.DomainDivergenceResult, error) {
+			if domainPattern != "Billing" {
+				t.Errorf("expected domainPattern 'Billing', got %s", domainPattern)
+			}
+			return []*query.DomainDivergenceResult{
+				{
+					DomainID:        "dom-1",
+					DomainName:      "Billing",
+					TotalFunctions:  15,
+					DivergenceScore: 0.65,
+				},
+			}, nil
+		},
+	}
+	s := NewServer(mockProvider, nil, config.Config{}, "test")
+
+	req, err := http.NewRequest("GET", "/api/query?type=divergence&target=Billing", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var response []*query.DomainDivergenceResult
+	err = json.Unmarshal(rr.Body.Bytes(), &response)
+	if err != nil {
+		t.Fatalf("handler returned invalid json: %v", err)
+	}
+	if len(response) != 1 || response[0].DomainName != "Billing" {
+		t.Errorf("unexpected divergence response: %v", response)
+	}
+}
+
+func TestQueryDualLensSeams(t *testing.T) {
+	mockProvider := &mockGraphProvider{
+		GetDualLensSeamsFunc: func(ctx context.Context, modulePattern string, minScore float64, maxCutEdges int, limit int) ([]*query.DualLensSeamResult, error) {
+			if maxCutEdges != 4 {
+				t.Errorf("expected maxCutEdges 4, got %d", maxCutEdges)
+			}
+			return []*query.DualLensSeamResult{
+				{
+					ID:             "seam-1",
+					Seam:           "ProcessPayment",
+					InternalFanIn:  5,
+					VolatileFanOut: 3,
+					CutEdges:       2,
+					Score:          15.0,
+				},
+			}, nil
+		},
+	}
+	s := NewServer(mockProvider, nil, config.Config{}, "test")
+
+	req, err := http.NewRequest("GET", "/api/query?type=dual-lens-seams", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var response []*query.DualLensSeamResult
+	err = json.Unmarshal(rr.Body.Bytes(), &response)
+	if err != nil {
+		t.Fatalf("handler returned invalid json: %v", err)
+	}
+	if len(response) != 1 || response[0].Score != 15.0 {
+		t.Errorf("unexpected dual-lens seams response: %v", response)
 	}
 }

@@ -249,6 +249,24 @@ func (s *Server) handleQuery() http.HandlerFunc {
 			result, err = s.provider.GetCoverage(req.Target)
 		case "seams":
 			result, err = s.provider.GetSeams(req.Module, req.Layer)
+		case "dual-lens-seams":
+			minScore := req.Similarity
+			if minScore == 0 {
+				minScore = 10.0
+			}
+			limit := req.Limit
+			if limit == 0 {
+				limit = 100
+			}
+			result, err = s.provider.GetDualLensSeams(r.Context(), req.Module, minScore, 4, limit)
+		case "communities":
+			limit := req.Limit
+			if limit == 0 {
+				limit = 100
+			}
+			result, err = s.provider.GetCommunities(r.Context(), limit)
+		case "divergence":
+			result, err = s.provider.GetDivergence(r.Context(), req.Target)
 		case "hotspots":
 			result, err = s.provider.GetHotspots(req.Module)
 		case "locate-usage":

@@ -8,6 +8,7 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="css/style.css"/>
     <script id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
@@ -121,6 +122,14 @@
             <!-- Layer Controls Overlay -->
             <div class="absolute top-6 right-6 flex flex-col gap-2 bg-slate-100/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 z-30">
                 <h3 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 px-1">Graph Layers</h3>
+                <button id="btn-structural-layer" title="Toggle Structural Community Convex Hulls (CPM Leiden Partitions)." class="h-9 px-3 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 shadow-sm flex items-center gap-2 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors w-full justify-start">
+                    <span class="size-2 rounded-full bg-emerald-500"></span>
+                    Structural Communities
+                </button>
+                <button id="btn-dual-lens-layer" title="Toggle Dual-Lens Visual Contrast (Structural Hulls + Semantic Domain Circles)." class="h-9 px-3 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 shadow-sm flex items-center gap-2 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors w-full justify-start">
+                    <span class="size-2 rounded-full bg-purple-500"></span>
+                    Dual-Lens Contrast
+                </button>
                 <button id="btn-physical-layer" title="Toggle Physical components (Files, Functions, Classes). Toggling ON will fetch associated physical components for visible semantic nodes." class="h-9 px-3 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 shadow-sm flex items-center gap-2 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors w-full justify-start">
                     <span class="size-2 rounded-full bg-physical-blue"></span>
                     Physical

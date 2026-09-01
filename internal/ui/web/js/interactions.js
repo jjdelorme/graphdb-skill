@@ -83,9 +83,32 @@ export function initEventListeners() {
     }
 
     // Initialize visual state
+    updateLayerButtonState('btn-structural-layer', visibilitySettings.showHulls);
+    updateLayerButtonState('btn-dual-lens-layer', visibilitySettings.showDualLens);
     updateLayerButtonState('btn-physical-layer', visibilitySettings.showPhysical);
     updateLayerButtonState('btn-semantic-layer', visibilitySettings.showSemantic);
     updateLayerButtonState('btn-test-layer', visibilitySettings.showTests);
+
+    const btnStructural = document.getElementById('btn-structural-layer');
+    if (btnStructural) {
+        btnStructural.addEventListener('click', (e) => {
+            visibilitySettings.showHulls = !visibilitySettings.showHulls;
+            state.showHulls = visibilitySettings.showHulls;
+            updateLayerButtonState('btn-structural-layer', visibilitySettings.showHulls);
+            renderGraph();
+        });
+    }
+
+    const btnDualLens = document.getElementById('btn-dual-lens-layer');
+    if (btnDualLens) {
+        btnDualLens.addEventListener('click', (e) => {
+            visibilitySettings.showDualLens = !visibilitySettings.showDualLens;
+            state.showDualLens = visibilitySettings.showDualLens;
+            updateLayerButtonState('btn-dual-lens-layer', visibilitySettings.showDualLens);
+            updateLegend();
+            renderGraph();
+        });
+    }
 
     document.getElementById('btn-physical-layer').addEventListener('click', (e) => {
         visibilitySettings.showPhysical = !visibilitySettings.showPhysical;

@@ -14,7 +14,7 @@ import (
 
 func handleQuery(args []string) {
 	fs := flag.NewFlagSet("query", flag.ExitOnError)
-	typePtr := fs.String("type", "", "Query type: search-features, search-similar, hybrid-context, neighbors, impact, globals, coverage, seams, hotspots, explore-domain, what-if, status, semantic-seams, cypher, duplicates")
+	typePtr := fs.String("type", "", "Query type: search-features, search-similar, hybrid-context, neighbors, impact, globals, coverage, seams, hotspots, explore-domain, what-if, status, semantic-seams, cypher, duplicates, divergence, communities")
 	dirPtr := fs.String("dir", "", "Base directory for source files (used by fetch-source)")
 	targetPtr := fs.String("target", "", "Target function name or query text (comma-separated for what-if)")
 	target2Ptr := fs.String("target2", "", "Second target (e.g. for locate-usage or what-if)")
@@ -27,6 +27,12 @@ func handleQuery(args []string) {
 	similarityPtr := fs.Float64("similarity", 0.5, "Cosine similarity threshold for semantic-seams (lower means more divergent)")
 	edgeTypesPtr := fs.String("edge-types", "", "Comma-separated relationship types for traverse")
 	directionPtr := fs.String("direction", "outgoing", "Traversal direction: incoming, outgoing, both")
+
+	// Dual-Lens & Divergence flags
+	dualLensPtr := fs.Bool("dual-lens", false, "Use Dual-Lens structural CPM Leiden and cut-edge seam ranking")
+	minScorePtr := fs.Float64("min-score", 10.0, "Minimum Actionable Seam Score threshold for dual-lens seams")
+	maxCutEdgesPtr := fs.Int("max-cut-edges", 4, "Maximum cut-edge threshold for Tier 1 dual-lens seams")
+	domainPtr := fs.String("domain", ".*", "Domain name or pattern for divergence query")
 
 	// Embedder args for 'features' type
 	locationPtr := fs.String("location", "", "GCP Location")
@@ -165,7 +171,17 @@ func handleQuery(args []string) {
 		result, err = provider.GetCoverage(*targetPtr)
 
 	case "seams":
-		result, err = provider.GetSeams(*modulePtr, *layerPtr)
+		if *dualLensPtr {
+			result, err = provider.GetDualLensSeams(context.Background(), *modulePtr, *minScorePtr, *maxCutEdgesPtr, *limitPtr)
+		} else {
+			result, err = provider.GetSeams(*modulePtr, *layerPtr)
+		}
+
+	case "divergence":
+		result, err = provider.GetDivergence(context.Background(), *domainPtr)
+
+	case "communities":
+		result, err = provider.GetCommunities(context.Background(), *limitPtr)
 
 	case "hotspots":
 		result, err = provider.GetHotspots(*modulePtr)
@@ -240,7 +256,7 @@ func handleQuery(args []string) {
 		result, err = provider.GetSemanticSeams(context.Background(), *similarityPtr)
 
 	default:
-		log.Fatalf("Unknown or missing query type: %s. Valid types: search-features, search-similar, hybrid-context, neighbors, impact, globals, coverage, seams, hotspots, explore-domain, what-if, status, semantic-seams", *typePtr)
+		log.Fatalf("Unknown or missing query type: %s. Valid types: search-features, search-similar, hybrid-context, neighbors, impact, globals, coverage, seams, hotspots, explore-domain, what-if, status, semantic-seams, divergence, communities", *typePtr)
 	}
 
 	if err != nil {

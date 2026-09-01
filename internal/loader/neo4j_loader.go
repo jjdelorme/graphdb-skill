@@ -211,6 +211,12 @@ func (l *Neo4jLoader) getConstraints() []string {
 		"CREATE INDEX IF NOT EXISTS FOR (n:Function) ON (n.is_test)",
 		"CREATE INDEX IF NOT EXISTS FOR (n:File) ON (n.file)",
 		"CREATE INDEX IF NOT EXISTS FOR (n:File) ON (n.is_test)",
+		// Structural Community Constraints and Indexes (Campaign 20)
+		"CREATE CONSTRAINT IF NOT EXISTS FOR (c:StructuralCommunity) REQUIRE c.id IS UNIQUE",
+		"CREATE INDEX IF NOT EXISTS FOR (c:StructuralCommunity) ON (c.name)",
+		"CREATE INDEX IF NOT EXISTS FOR (c:StructuralCommunity) ON (c.size)",
+		"CREATE INDEX IF NOT EXISTS FOR (n:SharedBoundary) ON (n.id)",
+		"CREATE INDEX IF NOT EXISTS FOR (n:CrossCuttingHub) ON (n.id)",
 		// Vector Indexes (restored from Node.js implementation)
 		fmt.Sprintf(`CREATE VECTOR INDEX feature_embeddings IF NOT EXISTS
 		FOR (n:Feature) ON (n.embedding)

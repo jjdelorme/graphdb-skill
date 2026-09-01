@@ -126,6 +126,49 @@ type BatchJob struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// DualLensSeamResult represents a high-ROI Tier 1 refactoring seam.
+type DualLensSeamResult struct {
+	ID             string  `json:"id"`
+	Seam           string  `json:"seam"`
+	File           string  `json:"file"`
+	InternalFanIn  int     `json:"internal_fan_in"`
+	VolatileFanOut int     `json:"volatile_fan_out"`
+	CutEdges       int     `json:"cut_edges"`
+	Score          float64 `json:"score"`
+	Community      string  `json:"community"`
+	Domain         string  `json:"domain"`
+}
+
+// CommunityDistributionItem represents a single community's share of a domain.
+type CommunityDistributionItem struct {
+	CommunityID   string  `json:"community_id"`
+	CommunityName string  `json:"community_name"`
+	FunctionCount int     `json:"function_count"`
+	Ratio         float64 `json:"ratio"`
+}
+
+// DomainDivergenceResult represents the structural dispersion of a semantic domain.
+type DomainDivergenceResult struct {
+	DomainID        string                      `json:"domain_id"`
+	DomainName      string                      `json:"domain_name"`
+	TotalFunctions  int                         `json:"total_functions"`
+	DivergenceScore float64                     `json:"divergence_score"`
+	Distribution    []CommunityDistributionItem `json:"distribution"`
+}
+
+// StructuralCommunityResult represents an enriched structural community partition.
+type StructuralCommunityResult struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	Gamma                float64  `json:"gamma"`
+	Size                 int64    `json:"size"`
+	Density              float64  `json:"density"`
+	InternalEdgeCount    int64    `json:"internal_edge_count"`
+	BPRAvg               float64  `json:"bpr_avg"`
+	SharedBoundaryCount  int      `json:"shared_boundary_count"`
+	CrossCuttingHubCount int      `json:"cross_cutting_hub_count"`
+	DominantDomains      []string `json:"dominant_domains"`
+}
 
 // GraphProvider defines the interface for graph database operations.
 type GraphProvider interface {
@@ -156,6 +199,11 @@ type GraphProvider interface {
 	WhatIf(targets []string) (*WhatIfResult, error)
 	GetSemanticSeams(ctx context.Context, similarityThreshold float64) ([]*SemanticSeamResult, error)
 
+	// Dual-Lens Structural Queries (Campaign 20)
+	GetDualLensSeams(ctx context.Context, modulePattern string, minScore float64, maxCutEdges int, limit int) ([]*DualLensSeamResult, error)
+	GetDivergence(ctx context.Context, domainPattern string) ([]*DomainDivergenceResult, error)
+	GetCommunities(ctx context.Context, limit int) ([]*StructuralCommunityResult, error)
+
 	// Test Coverage Analysis
 	GetCoverage(nodeID string) ([]*graph.Node, error)
 	LinkTests() error
@@ -182,6 +230,10 @@ type GraphProvider interface {
 	ClearFeatureTopology() error
 	UpdateFeatureTopology(nodes []*graph.Node, edges []*graph.Edge) error
 	UpdateFeatureSummary(id string, name string, description string) error
+
+	// Structural Topology Persistence (Campaign 20)
+	ClearStructuralTopology() error
+	UpdateStructuralTopology(nodes []*graph.Node, edges []*graph.Edge) error
 
 	// BatchJob operations
 	CreateBatchJobNode(ctx context.Context, jobID, modelName, gcsInput, gcsOutput string) error

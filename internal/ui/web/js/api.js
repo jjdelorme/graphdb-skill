@@ -25,9 +25,28 @@ export async function fetchSearch(target) {
 }
 
 export async function fetchSeams(type = 'seams') {
-    const endpoint = type === 'semantic-seams' ? '/api/query?type=semantic-seams&similarity=0.6' : '/api/query?type=seams';
+    let endpoint = '/api/query?type=seams';
+    if (type === 'semantic-seams') {
+        endpoint = '/api/query?type=semantic-seams&similarity=0.6';
+    } else if (type === 'dual-lens' || type === 'dual-lens-seams') {
+        endpoint = '/api/query?type=dual-lens-seams&limit=50';
+    }
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error(`Failed to fetch ${type}`);
+    return await response.json();
+}
+
+export async function fetchCommunities(limit = 100) {
+    const response = await fetch(`/api/query?type=communities&limit=${limit}`);
+    if (!response.ok) throw new Error('Failed to fetch structural communities');
+    return await response.json();
+}
+
+export async function fetchDivergence(domain = "") {
+    let url = '/api/query?type=divergence';
+    if (domain) url += `&target=${encodeURIComponent(domain)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Failed to fetch domain divergence');
     return await response.json();
 }
 

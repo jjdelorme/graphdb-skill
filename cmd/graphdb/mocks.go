@@ -29,10 +29,15 @@ func (s *MockSummarizer) Summarize(snippets []string, level string, extraContext
 
 // MockProvider for testing/dry-run
 type MockProvider struct {
-	GetSemanticSeamsCalled bool
-	WipeDatabaseFn         func(ctx context.Context) error
-	BatchJobCount          int
-	ActiveBatchJobs        []query.BatchJob
+	GetSemanticSeamsCalled         bool
+	WipeDatabaseFn                 func(ctx context.Context) error
+	BatchJobCount                  int
+	ActiveBatchJobs                []query.BatchJob
+	DualLensSeamsResults           []*query.DualLensSeamResult
+	DivergenceResults              []*query.DomainDivergenceResult
+	CommunitiesResults             []*query.StructuralCommunityResult
+	ClearStructuralTopologyCalled  bool
+	UpdateStructuralTopologyCalled bool
 }
 
 func (m *MockProvider) Close() error { return nil }
@@ -92,6 +97,83 @@ func (m *MockProvider) GetSemanticSeams(ctx context.Context, similarityThreshold
 			Similarity: 0.1,
 		},
 	}, nil
+}
+
+func (m *MockProvider) GetDualLensSeams(ctx context.Context, modulePattern string, minScore float64, maxCutEdges int, limit int) ([]*query.DualLensSeamResult, error) {
+	if m.DualLensSeamsResults != nil {
+		return m.DualLensSeamsResults, nil
+	}
+	return []*query.DualLensSeamResult{
+		{
+			ID:             "func_mock_1",
+			Seam:           "ProcessPayment",
+			File:           "payment/gateway.go",
+			InternalFanIn:  25,
+			VolatileFanOut: 20,
+			CutEdges:       2,
+			Score:          166.6667,
+			Community:      "comm-1",
+			Domain:         "Billing",
+		},
+	}, nil
+}
+
+func (m *MockProvider) GetDivergence(ctx context.Context, domainPattern string) ([]*query.DomainDivergenceResult, error) {
+	if m.DivergenceResults != nil {
+		return m.DivergenceResults, nil
+	}
+	return []*query.DomainDivergenceResult{
+		{
+			DomainID:        "domain_billing",
+			DomainName:      "Billing",
+			TotalFunctions:  10,
+			DivergenceScore: 0.3,
+			Distribution: []query.CommunityDistributionItem{
+				{
+					CommunityID:   "comm-1",
+					CommunityName: "Community 1",
+					FunctionCount: 7,
+					Ratio:         0.7,
+				},
+				{
+					CommunityID:   "comm-2",
+					CommunityName: "Community 2",
+					FunctionCount: 3,
+					Ratio:         0.3,
+				},
+			},
+		},
+	}, nil
+}
+
+func (m *MockProvider) GetCommunities(ctx context.Context, limit int) ([]*query.StructuralCommunityResult, error) {
+	if m.CommunitiesResults != nil {
+		return m.CommunitiesResults, nil
+	}
+	return []*query.StructuralCommunityResult{
+		{
+			ID:                   "comm-1",
+			Name:                 "Community 1",
+			Gamma:                0.05,
+			Size:                 50,
+			Density:              0.35,
+			InternalEdgeCount:    120,
+			BPRAvg:               0.08,
+			SharedBoundaryCount:  2,
+			CrossCuttingHubCount: 1,
+			DominantDomains:      []string{"Billing", "Orders"},
+		},
+	}, nil
+}
+
+func (m *MockProvider) ClearStructuralTopology() error {
+	m.ClearStructuralTopologyCalled = true
+	return nil
+}
+
+func (m *MockProvider) UpdateStructuralTopology(nodes []*graph.Node, edges []*graph.Edge) error {
+	m.UpdateStructuralTopologyCalled = true
+	return nil
 }
 
 func (m *MockProvider) GetCoverage(nodeID string) ([]*graph.Node, error) { return nil, nil }

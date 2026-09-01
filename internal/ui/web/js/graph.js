@@ -1,9 +1,14 @@
-import { nodes, links, nodesMap, linksMap, state, seamState } from './state.js';
-import { isNodeVisible, getColor } from './ui.js';
+import { nodes, links, nodesMap, linksMap, state, seamState, visibilitySettings } from './state.js';
+import { isNodeVisible, getColor, getCommunityColor, getNodeCommunityId, isSharedBoundary, isQuarantinedHub } from './ui.js';
 
-let svg, g, gLinks, gNodes, zoom, simulation;
+let svg, g, gHulls, gLinks, gNodes, zoom, simulation;
 let width, height;
 let registeredHandlers = {};
+
+const hullLine = d3.line()
+    .x(d => d[0])
+    .y(d => d[1])
+    .curve(d3.curveCatmullRomClosed.alpha(0.5));
 
 export function initGraph(handleNodeClick, handleNodeMouseOver, handleNodeMouseOut, handleNodeDoubleClick, handleNodeContextMenu) {
     registeredHandlers = {
@@ -37,6 +42,8 @@ export function initGraph(handleNodeClick, handleNodeMouseOver, handleNodeMouseO
         .on("dblclick.zoom", null); 
 
     g = svg.append('g');
+    // Feature F18: Add hulls-layer BEFORE links-layer so hulls sit behind edges and nodes
+    gHulls = g.append('g').attr('class', 'hulls-layer');
     gLinks = g.append('g').attr('class', 'links-layer');
     gNodes = g.append('g').attr('class', 'nodes-layer');
 
@@ -62,13 +69,15 @@ export function initGraph(handleNodeClick, handleNodeMouseOver, handleNodeMouseO
         .force("collision", d3.forceCollide().radius(45));
 
     simulation.on("tick", () => {
-        g.selectAll(".link")
+        updateHullsTick();
+
+        gLinks.selectAll(".link")
             .attr("x1", d => d.source.x)
             .attr("y1", d => d.source.y)
             .attr("x2", d => d.target.x)
             .attr("y2", d => d.target.y);
 
-        g.selectAll(".node-group")
+        gNodes.selectAll(".node-group")
             .attr("transform", d => `translate(${d.x},${d.y})`);
     });
 
@@ -85,6 +94,150 @@ function isSemanticSeam(nodeId) {
         if (seamState.semanticSeams[i].method_a === nodeId || seamState.semanticSeams[i].method_b === nodeId) return true;
     }
     return false;
+}
+
+// Compute convex hull data for a community (Feature F18)
+function computeCommunityHullData(commId, commNodes) {
+    if (!commNodes || commNodes.length === 0) return null;
+
+    let sumX = 0, sumY = 0;
+    commNodes.forEach(n => {
+        sumX += n.x;
+        sumY += n.y;
+    });
+    const cx = sumX / commNodes.length;
+    const cy = sumY / commNodes.length;
+
+    let pathStr = '';
+    const pad = 30; // 30px radial expansion padding
+
+    if (commNodes.length >= 3) {
+        const pts = commNodes.map(n => [n.x, n.y]);
+        let hull = d3.polygonHull(pts);
+
+        if (!hull || hull.length < 3) {
+            // Collinear or degenerate fallback: expand points radially
+            const expandedPts = [];
+            pts.forEach(([px, py]) => {
+                expandedPts.push([px + pad, py]);
+                expandedPts.push([px - pad, py]);
+                expandedPts.push([px, py + pad]);
+                expandedPts.push([px, py - pad]);
+            });
+            hull = d3.polygonHull(expandedPts);
+        }
+
+        if (hull && hull.length >= 3) {
+            // Radial expansion from centroid
+            const expandedHull = hull.map(([px, py]) => {
+                const dx = px - cx;
+                const dy = py - cy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 0.001) {
+                    return [px + pad, py];
+                }
+                return [
+                    px + (dx / dist) * pad,
+                    py + (dy / dist) * pad
+                ];
+            });
+            pathStr = hullLine(expandedHull);
+        }
+    } else if (commNodes.length === 2) {
+        // Double node fallback: smooth capsule / pill path
+        const n1 = commNodes[0];
+        const n2 = commNodes[1];
+        const dx = n2.x - n1.x;
+        const dy = n2.y - n1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const r = 35;
+
+        if (dist < 0.001) {
+            pathStr = `M ${n1.x - r},${n1.y} a ${r},${r} 0 1,0 ${2 * r},0 a ${r},${r} 0 1,0 ${-2 * r},0`;
+        } else {
+            const nx = -dy / dist;
+            const ny = dx / dist;
+            const tx = dx / dist;
+            const ty = dy / dist;
+
+            const capsulePoints = [
+                [n1.x - tx * r, n1.y - ty * r],
+                [n1.x + nx * r, n1.y + ny * r],
+                [n2.x + nx * r, n2.y + ny * r],
+                [n2.x + tx * r, n2.y + ty * r],
+                [n2.x - nx * r, n2.y - ny * r],
+                [n1.x - nx * r, n1.y - ny * r]
+            ];
+            pathStr = hullLine(capsulePoints);
+        }
+    } else if (commNodes.length === 1) {
+        // Single node fallback: circle
+        const n = commNodes[0];
+        const r = 35;
+        pathStr = `M ${n.x - r},${n.y} a ${r},${r} 0 1,0 ${2 * r},0 a ${r},${r} 0 1,0 ${-2 * r},0`;
+    }
+
+    return {
+        id: commId,
+        nodes: commNodes,
+        path: pathStr,
+        cx: cx,
+        cy: cy,
+        count: commNodes.length
+    };
+}
+
+function getCommunityGroups() {
+    const showHulls = state.showHulls && visibilitySettings.showHulls;
+    if (!showHulls) return [];
+
+    const commMap = new Map();
+    nodes.forEach(n => {
+        if (!isNodeVisible(n)) return;
+        // Quarantined hubs are excluded from hull bounds to avoid ballooning
+        if (isQuarantinedHub(n)) return;
+
+        const commId = getNodeCommunityId(n);
+        if (commId !== null) {
+            if (!commMap.has(commId)) {
+                commMap.set(commId, []);
+            }
+            commMap.get(commId).push(n);
+        }
+    });
+
+    const groups = [];
+    commMap.forEach((commNodes, commId) => {
+        const data = computeCommunityHullData(commId, commNodes);
+        if (data) groups.push(data);
+    });
+
+    return groups;
+}
+
+function updateHullsTick() {
+    if (!gHulls) return;
+
+    const showHulls = state.showHulls && visibilitySettings.showHulls;
+    if (!showHulls) {
+        gHulls.selectAll(".community-hull-group").style("opacity", 0);
+        return;
+    }
+
+    gHulls.selectAll(".community-hull-group")
+        .each(function(d) {
+            const data = computeCommunityHullData(d.id, d.nodes);
+            if (!data) return;
+
+            const group = d3.select(this);
+            group.select(".community-hull")
+                .attr("d", data.path);
+
+            group.select(".community-hull-label")
+                .attr("x", data.cx)
+                .attr("y", data.cy - 35)
+                .text(`Community #${data.id} (${data.count} nodes)`);
+        });
 }
 
 export function updateGraph(newNodes, newLinks) {
@@ -125,7 +278,7 @@ export function updateGraph(newNodes, newLinks) {
                 linksMap.set(linkId, link);
                 links.push(link);
 
-                // If one of the endpoints was just added, try to seed its coordinates from the other endpoint if it exists
+                // If one of the endpoints was just added, seed coordinates
                 if (newlyAddedIds.has(sourceId) && nodesMap.has(targetId) && !newlyAddedIds.has(targetId)) {
                     const sourceNode = nodesMap.get(sourceId);
                     const targetNode = nodesMap.get(targetId);
@@ -152,6 +305,45 @@ export function renderGraph() {
         handleNodeDoubleClick,
         handleNodeContextMenu
     } = registeredHandlers;
+
+    // Feature F18: Render Structural Community Convex Hulls
+    const commGroups = getCommunityGroups();
+    let hullSelection = gHulls.selectAll(".community-hull-group")
+        .data(commGroups, d => d.id);
+
+    hullSelection.exit().remove();
+
+    const hullEnter = hullSelection.enter()
+        .append("g")
+        .attr("class", "community-hull-group");
+
+    hullEnter.append("path")
+        .attr("class", d => `community-hull ${state.selectedCommunity === d.id ? 'focused' : ''}`)
+        .attr("fill", d => getCommunityColor(d.id))
+        .attr("stroke", d => getCommunityColor(d.id))
+        .attr("d", d => d.path);
+
+    hullEnter.append("text")
+        .attr("class", "community-hull-label")
+        .attr("x", d => d.cx)
+        .attr("y", d => d.cy - 35)
+        .attr("text-anchor", "middle")
+        .attr("fill", d => getCommunityColor(d.id))
+        .text(d => `Community #${d.id} (${d.count} nodes)`);
+
+    hullSelection = hullEnter.merge(hullSelection);
+
+    const showHulls = state.showHulls && visibilitySettings.showHulls;
+    hullSelection.transition().duration(400)
+        .style("opacity", showHulls ? 1 : 0);
+
+    hullSelection.select(".community-hull")
+        .attr("class", d => `community-hull ${state.selectedCommunity === d.id ? 'focused' : ''}`)
+        .attr("fill", d => getCommunityColor(d.id))
+        .attr("stroke", d => getCommunityColor(d.id));
+
+    hullSelection.select(".community-hull-label")
+        .attr("fill", d => getCommunityColor(d.id));
 
     // Links
     let linkSelection = gLinks.selectAll(".link")
@@ -215,11 +407,15 @@ export function renderGraph() {
         .style("opacity", d => isNodeVisible(d) ? 1 : 0.1)
         .style("pointer-events", d => isNodeVisible(d) ? "auto" : "none");
 
+    // Dynamic coloring & seam/topology badge classes (Features F18 & F19)
     nodeSelection.select('circle')
+        .attr('fill', d => getColor(d))
         .attr('class', d => {
             let cls = 'node';
             if (seamState.showPinchPoints && seamState.pinchPoints.has(d.id)) cls += ' pinch-point';
             if (seamState.showSemanticSeams && isSemanticSeam(d.id)) cls += ' semantic-seam';
+            if (isSharedBoundary(d)) cls += ' shared-boundary';
+            if (isQuarantinedHub(d)) cls += ' cross-cutting-hub';
             return cls;
         });
 
@@ -290,4 +486,3 @@ export function zoomFit(transitionDuration = 750) {
 
     svg.transition().duration(transitionDuration).call(zoom.transform, transform);
 }
-

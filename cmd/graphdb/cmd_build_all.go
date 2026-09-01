@@ -83,20 +83,25 @@ func handleBuildAll(args []string) {
 		enrichArgs := []string{"-dir", *dirPtr}
 		enrichCmd(enrichArgs)
 
-		fmt.Println("\n✅ Feature enrichment is complete. Resuming remaining build phases...")
+		// 3b. Enrich Structural Topology
+		fmt.Println("\n[Phase 3b/7] Enriching Structural Topology (CPM Leiden)...")
+		topologyArgs := []string{"-dir", *dirPtr}
+		enrichTopologyCmd(topologyArgs)
+
+		fmt.Println("\n✅ Feature & Topology enrichment is complete. Resuming remaining build phases...")
 
 		// 4. Enrich History
-		fmt.Println("\n[Phase 4/6] Enriching Git History...")
+		fmt.Println("\n[Phase 4/7] Enriching Git History...")
 		historyArgs := []string{"-dir", *dirPtr}
 		enrichHistoryCmd(historyArgs)
 
 		// 5. Enrich Contamination
-		fmt.Println("\n[Phase 5/6] Enriching Contamination/Risk...")
+		fmt.Println("\n[Phase 5/7] Enriching Contamination/Risk...")
 		contaminationArgs := []string{}
 		enrichContaminationCmd(contaminationArgs)
 
 		// 6. Enrich Tests
-		fmt.Println("\n[Phase 6/6] Linking Tests...")
+		fmt.Println("\n[Phase 6/7] Linking Tests...")
 		testArgs := []string{}
 		enrichTestsCmd(testArgs)
 
@@ -165,7 +170,7 @@ func handleBuildAll(args []string) {
 	}
 
 	// 1. Ingest
-	fmt.Println("\n[Phase 1/6] Ingesting Codebase...")
+	fmt.Println("\n[Phase 1/7] Ingesting Codebase...")
 	var ingestArgs []string
 	if isIncremental {
 		ingestArgs = []string{"-dir", *dirPtr}
@@ -176,7 +181,7 @@ func handleBuildAll(args []string) {
 
 	if !isIncremental {
 		// 2. Import Structural Graph
-		fmt.Println("\n[Phase 2/6] Importing to Neo4j...")
+		fmt.Println("\n[Phase 2/7] Importing to Neo4j...")
 		importArgs1 := []string{"-nodes", *nodesPtr, "-edges", *edgesPtr}
 		importCmd(importArgs1)
 
@@ -189,7 +194,7 @@ func handleBuildAll(args []string) {
 			fmt.Printf("Warning: failed to remove %s: %v\n", *edgesPtr, err)
 		}
 	} else {
-		fmt.Println("\n[Phase 2/6] Skipping Import (Incremental mode writes directly to DB)...")
+		fmt.Println("\n[Phase 2/7] Skipping Import (Incremental mode writes directly to DB)...")
 
 		// In incremental mode, we need to manually update the graph state to HEAD
 		// because ingest doesn't do it.
@@ -207,7 +212,7 @@ func handleBuildAll(args []string) {
 	}
 
 	// 3. Enrich Features
-	fmt.Println("\n[Phase 3/6] Enriching Features (in-database)...")
+	fmt.Println("\n[Phase 3/7] Enriching Features (in-database)...")
 	if *batchPtr {
 		enrichArgs := []string{"-dir", *dirPtr, "--batch"}
 		if *gcsBucketPtr != "" {
@@ -222,18 +227,23 @@ func handleBuildAll(args []string) {
 		enrichCmd(enrichArgs)
 	}
 
+	// 3b. Enrich Structural Topology
+	fmt.Println("\n[Phase 3b/7] Enriching Structural Topology (CPM Leiden)...")
+	topologyArgs := []string{"-dir", *dirPtr}
+	enrichTopologyCmd(topologyArgs)
+
 	// 4. Enrich History
-	fmt.Println("\n[Phase 4/6] Enriching Git History...")
+	fmt.Println("\n[Phase 4/7] Enriching Git History...")
 	historyArgs := []string{"-dir", *dirPtr}
 	enrichHistoryCmd(historyArgs)
 
 	// 5. Enrich Contamination
-	fmt.Println("\n[Phase 5/6] Enriching Contamination/Risk...")
+	fmt.Println("\n[Phase 5/7] Enriching Contamination/Risk...")
 	contaminationArgs := []string{}
 	enrichContaminationCmd(contaminationArgs)
 
 	// 6. Enrich Tests
-	fmt.Println("\n[Phase 6/6] Linking Tests...")
+	fmt.Println("\n[Phase 6/7] Linking Tests...")
 	testArgs := []string{}
 	enrichTestsCmd(testArgs)
 
